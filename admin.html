@@ -72,12 +72,12 @@
 (function(){
 'use strict';
 var $ = function(s){ return document.querySelector(s); };
-var GH_REPO = 'Gil0407/notepad';   // ← 与 index.html 保持一致
+var GH_REPO = 'Gil0407/notepad';
 var GH_BRANCH = 'main';
 var GH_FILE = 'blog.json';
 var RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/' + GH_FILE;
 
-var data = null; // { author, siteName, avatar, notes:[...] }
+var data = null;
 
 function pad(n){ return String(n).padStart(2, '0'); }
 function fmtTime(ts){
@@ -121,11 +121,52 @@ function getToken(){
   return localStorage.getItem('notepad-gh-token');
 }
 
+/* ---------- 读取（展示用）：优先 Pages，失败走 raw ---------- */
 function loadData(){
-  // 优先从 Pages 读（快），失败则从 raw.githubusercontent 读
   return fetch(GH_FILE + '?t=' + Date.now())
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .catch(function(){ return fetch(RAW_URL + '?t=' + Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }); });
+}
+
+/* ---------- 读取（写回用）：必须走 API，拿最新内容 + sha ---------- */
+function ghGetFile(token){
+  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
+    .then(function(r){
+      if(r.status === 404) return { data: null, sha: null };
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(function(j){
+        var obj = null;
+        try{ obj = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))))); }catch(e){}
+        return { data: obj, sha: j.sha };
+      });
+    });
+}
+function ghPutFile(obj, sha, token, message){
+  var body = {
+    message: message,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2)))),
+    branch: GH_BRANCH
+  };
+  if(sha) body.sha = sha;
+  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE, {
+    method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+  });
+}
+
+/* 基于最新远程数据执行一次修改：fn 接收远程 data 并返回新的 data（或 null 表示放弃） */
+function mutateRemote(fn){
+  var token = getToken();
+  if(!token) return Promise.reject(new Error('没有 Token'));
+  return ghGetFile(token).then(function(remote){
+    var remoteData = (remote.data && typeof remote.data === 'object') ? remote.data : { notes: [] };
+    if(!Array.isArray(remoteData.notes)) remoteData.notes = [];
+    var next = fn(remoteData);
+    if(!next) return null;
+    return ghPutFile(next, remote.sha, token, 'admin update ' + new Date().toISOString())
+      .then(function(){ return next; });
+  });
 }
 
 function render(){
@@ -151,7 +192,6 @@ function render(){
     var full = document.createElement('div');
     full.innerHTML = sanitize(n.content);
     var imgs = full.querySelectorAll('img');
-    // 缩略展示前两张图
     for(var i = 0; i < Math.min(imgs.length, 2); i++){
       el.insertBefore(imgs[i].cloneNode(), el.querySelector('.item-acts'));
     }
@@ -166,50 +206,40 @@ function esc(s){
   });
 }
 
-/* 写回 blog.json（先取 sha 再 PUT） */
-function saveData(){
-  var token = getToken();
-  if(!token) return Promise.reject(new Error('没有 Token'));
-  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(j){
-      var body = {
-        message: 'admin update ' + new Date().toISOString(),
-        content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
-        branch: GH_BRANCH,
-        sha: j.sha
-      };
-      return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE, {
-        method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
-      });
-    })
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-    });
-}
-
 function togglePin(id){
-  var n = (data.notes || []).find(function(x){ return x.id === id; });
-  if(!n) return;
-  n.pinned = !n.pinned;
   toast('写入中…');
-  saveData().then(function(){
+  mutateRemote(function(remoteData){
+    var n = remoteData.notes.find(function(x){ return x.id === id; });
+    if(!n) return null;
+    n.pinned = !n.pinned;
+    n.updated = Date.now();
+    return remoteData;
+  }).then(function(next){
+    if(!next){ toast('这条内容已不存在，请刷新'); return; }
+    data = next;
     render();
-    toast(n.pinned ? '已置顶 📌' : '已取消置顶');
-  }).catch(function(e){ toast('失败：' + e.message); load(); });
+    toast('已更新置顶状态 📌');
+  }).catch(function(e){
+    toast('失败：' + e.message);
+    load();
+  });
 }
 
 function delNote(id, title){
   if(!confirm('确定从博客删除「' + (title || '无标题') + '」吗？删除后无法恢复。')) return;
-  data.notes = (data.notes || []).filter(function(x){ return x.id !== id; });
   toast('写入中…');
-  saveData().then(function(){
+  mutateRemote(function(remoteData){
+    remoteData.notes = remoteData.notes.filter(function(x){ return x.id !== id; });
+    return remoteData;
+  }).then(function(next){
+    if(!next){ toast('这条内容已不存在，请刷新'); return; }
+    data = next;
     render();
     toast('已删除 ✓ 约1分钟后博客生效');
-  }).catch(function(e){ toast('失败：' + e.message); load(); });
+  }).catch(function(e){
+    toast('失败：' + e.message);
+    load();
+  });
 }
 
 function load(){

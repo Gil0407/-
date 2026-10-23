@@ -243,7 +243,6 @@ $('#avatarInput').addEventListener('change', function(){
   fr.onload = function(){
     var img = new Image();
     img.onload = function(){
-      // 裁剪成正方形并压缩到 128px
       var S = 128, side = Math.min(img.width, img.height);
       var c = document.createElement('canvas');
       c.width = S; c.height = S;
@@ -462,7 +461,6 @@ function processImage(file){
     var fr = new FileReader();
     fr.onload = function(){
       var url = fr.result;
-      // GIF 有动画、小图不处理，直接原样插入
       if(file.type === 'image/gif' || file.size <= 200 * 1024){ resolve(url); return; }
       var img = new Image();
       img.onload = function(){
@@ -476,7 +474,7 @@ function processImage(file){
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
         var out = c.toDataURL('image/jpeg', 0.85);
-        if(out.length > url.length && url.length < 900 * 1024) out = url; // 处理后反而更大就保留原图
+        if(out.length > url.length && url.length < 900 * 1024) out = url;
         resolve(out);
       };
       img.onerror = function(){ resolve(url); };
@@ -518,7 +516,6 @@ function insertImages(files){
   });
 }
 
-// 粘贴截图
 editor.addEventListener('paste', function(e){
   var items = (e.clipboardData && e.clipboardData.items) || [];
   for(var i = 0; i < items.length; i++){
@@ -529,7 +526,6 @@ editor.addEventListener('paste', function(e){
     }
   }
 });
-// 拖拽图片文件进来
 editor.addEventListener('dragover', function(e){ e.preventDefault(); });
 editor.addEventListener('drop', function(e){
   var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function(f){ return /^image\//.test(f.type); });
@@ -549,7 +545,6 @@ editor.addEventListener('drop', function(e){
     insertImages(files);
   }
 });
-// 防止编辑器里的图片被误拖走
 editor.addEventListener('dragstart', function(e){
   if(e.target && e.target.tagName === 'IMG') e.preventDefault();
 });
@@ -571,7 +566,7 @@ function currentBlock(){
   return null;
 }
 $('#toolbar').addEventListener('mousedown', function(e){
-  if(e.target.closest('button')) e.preventDefault(); // 保持编辑区选区
+  if(e.target.closest('button')) e.preventDefault();
 });
 $('#toolbar').addEventListener('click', function(e){
   var b = e.target.closest('button[data-cmd]');
@@ -590,7 +585,6 @@ $('#toolbar').addEventListener('click', function(e){
   }
   scheduleSave();
 });
-// 工具栏按钮激活状态
 document.addEventListener('selectionchange', function(){
   var sel = getSelection();
   if(!sel.anchorNode || !editor.contains(sel.anchorNode)) return;
@@ -639,7 +633,7 @@ $('#importFile').addEventListener('change', function(){
       chain = chain.then(function(){
         var n = normalizeNote(raw);
         var exist = getNote(n.id);
-        if(exist && exist.updated >= n.updated) return; // 已有更新的内容则跳过
+        if(exist && exist.updated >= n.updated) return;
         changed++;
         var i = notes.indexOf(exist);
         if(i >= 0) notes[i] = n; else notes.push(n);
@@ -652,7 +646,7 @@ $('#importFile').addEventListener('change', function(){
 });
 
 /* ================= GitHub 发布 ================= */
-var GH_REPO = 'Gil0407/notepad';   // ← 你的 用户名/仓库名
+var GH_REPO = 'Gil0407/notepad';
 var GH_BRANCH = 'main';
 var GH_BLOG_FILE = 'blog.json';
 
@@ -670,7 +664,6 @@ function getToken(){
   return localStorage.getItem('notepad-gh-token');
 }
 
-/* 读取仓库里的 json 文件；不存在返回 { data:null, sha:null } */
 function ghGetFile(file, token){
   return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
     .then(function(r){
@@ -683,14 +676,13 @@ function ghGetFile(file, token){
       });
     });
 }
-/* 写入仓库 json 文件 */
 function ghPutFile(file, obj, sha, token, message){
   var body = {
     message: message,
     content: btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2)))),
     branch: GH_BRANCH
   };
-  if(sha) body.sha = sha; // 更新已有文件必须带 sha
+  if(sha) body.sha = sha;
   return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file, {
     method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
   }).then(function(r){
@@ -698,42 +690,49 @@ function ghPutFile(file, obj, sha, token, message){
   });
 }
 
-/* ---------- 全部发布到博客（发布后清空本地，不再占用本地缓存） ---------- */
+/* 合并远程与本地：远程已有笔记原样保留，同 id 用 updated 较新的版本覆盖 */
+function mergeRemoteWithLocal(remoteNotes, localNotes){
+  var byId = {};
+  var order = [];
+  (remoteNotes || []).forEach(function(r){
+    if(!r || !r.id) return;
+    if(!byId[r.id]) order.push(r.id);
+    byId[r.id] = r;
+  });
+  (localNotes || []).forEach(function(l){
+    if(!l || !l.id) return;
+    var old = byId[l.id];
+    if(!old){ byId[l.id] = l; order.push(l.id); return; }
+    if((l.updated || 0) >= (old.updated || 0)) byId[l.id] = l;
+  });
+  return order.map(function(id){ return byId[id]; });
+}
+
 function publishToBlog(){
   if(!notes.length){ toast('记事本是空的'); return; }
-  if(!confirm('将把 ' + notes.length + ' 条笔记全部发布到博客，并清空本地记事本。\n（要删除已发布的内容请打开 admin.html）')) return;
+  if(!confirm('将把 ' + notes.length + ' 条笔记发布到博客，并清空本地记事本。\n（远程已有的内容不会被覆盖，只会合并；要删除已发布的内容请打开 admin.html）')) return;
   var token = getToken();
   if(!token) return;
   toast('正在发布…');
   ghGetFile(GH_BLOG_FILE, token).then(function(remote){
     var remoteNotes = (remote.data && Array.isArray(remote.data.notes)) ? remote.data.notes : [];
-    // 给每条笔记带上具体时间（写入 json，24 小时制）
-    var pub = notes.map(function(n){
+    var localPub = notes.map(function(n){
       var c = normalizeNote(n);
       c.published = true;
       c.time = absTime(c.updated);
       return c;
     });
-    var pubMap = {};
-    pub.forEach(function(n){ pubMap[n.id] = n; });
-    // 1) 远程里已存在的：保留原顺序，内容用本地最新版
-    var merged = remoteNotes.filter(function(r){ return pubMap[r.id]; })
-                            .map(function(r){ return pubMap[r.id]; });
-    // 2) 本地新的：追加到后面
-    var inMerged = {};
-    merged.forEach(function(n){ inMerged[n.id] = 1; });
-    pub.forEach(function(n){ if(!inMerged[n.id]) merged.push(n); });
+    var merged = mergeRemoteWithLocal(remoteNotes, localPub);
     var payload = {
       app: 'notepad-blog', version: 1,
-      author: getAuthorId() || GH_REPO.split('/')[0],
-      siteName: getSiteName(),
-      avatar: getAvatar(),
+      author: getAuthorId() || (remote.data && remote.data.author) || GH_REPO.split('/')[0],
+      siteName: getSiteName() || (remote.data && remote.data.siteName) || '',
+      avatar: getAvatar() || (remote.data && remote.data.avatar) || '',
       publishedAt: Date.now(),
       notes: merged
     };
     return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString());
   }).then(function(){
-    // 清空本地记事本，不占用本地缓存
     var count = notes.length;
     notes = [];
     currentId = null;
