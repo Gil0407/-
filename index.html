@@ -32,6 +32,10 @@
   #sidebar{width:300px;min-width:300px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:transform .25s;}
   #sidebar header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;}
   #sidebar h1{font-size:19px;margin:0}
+  .me{display:flex;align-items:center;gap:10px;min-width:0}
+  .me-avatar{width:38px;height:38px;border-radius:50%;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:19px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);cursor:pointer;border:1px solid var(--border);transition:filter .15s}
+  .me-avatar:hover{filter:brightness(1.1)}
+  .me-avatar img{width:100%;height:100%;object-fit:cover}
   .iconbtn{background:none;border:none;color:var(--muted);font-size:16px;padding:6px 8px;border-radius:8px}
   .iconbtn:hover{background:var(--hover);color:var(--text)}
   #newNoteBtn{margin:6px 16px 10px;padding:10px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:15px;font-weight:600}
@@ -105,7 +109,10 @@
 <div id="app">
   <aside id="sidebar">
     <header>
-      <h1>📝 记事本</h1>
+      <div class="me">
+        <div class="me-avatar" id="meAvatar" title="点击更换头像">📝</div>
+        <h1>记事本</h1>
+      </div>
       <button id="themeToggle" class="iconbtn" title="切换深色/浅色模式">🌙</button>
     </header>
     <button id="newNoteBtn">＋ 新建笔记</button>
@@ -154,6 +161,7 @@
 <div id="toast"></div>
 <input type="file" id="imageInput" accept="image/*" multiple hidden />
 <input type="file" id="importFile" accept=".json,application/json" hidden />
+<input type="file" id="avatarInput" accept="image/*" hidden />
 
 <script>
 (function(){
@@ -161,6 +169,7 @@
 var $ = function(s){ return document.querySelector(s); };
 var editor = $('#editor'), titleInput = $('#titleInput');
 var notes = [], currentId = null, saveTimer = null, useLS = false, store = null;
+var pushTimer = null;
 
 function esc(s){
   return String(s).replace(/[&<>"']/g, function(c){
@@ -179,11 +188,45 @@ function fmtTime(ts){
 var stripDiv = document.createElement('div');
 function stripHtml(html){ stripDiv.innerHTML = html; return stripDiv.textContent || ''; }
 
+/* ================= 头像 ================= */
+function getAvatar(){ return localStorage.getItem('notepad-avatar') || ''; }
+function applyAvatar(){
+  var a = getAvatar();
+  $('#meAvatar').innerHTML = a ? '<img src="' + a + '" alt="">' : '📝';
+}
+$('#meAvatar').addEventListener('click', function(){ $('#avatarInput').click(); });
+$('#avatarInput').addEventListener('change', function(){
+  var f = this.files[0];
+  this.value = '';
+  if(!f) return;
+  if(!/^image\//.test(f.type)){ toast('请选择图片文件'); return; }
+  var fr = new FileReader();
+  fr.onload = function(){
+    var img = new Image();
+    img.onload = function(){
+      // 裁剪成正方形并压缩到 128px
+      var S = 128, side = Math.min(img.width, img.height);
+      var c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S);
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
+      try{
+        localStorage.setItem('notepad-avatar', c.toDataURL('image/jpeg', 0.85));
+        applyAvatar();
+        toast('头像已更新，点「发布到博客」后博客生效');
+      }catch(e){ toast('头像保存失败：存储空间不足'); }
+    };
+    img.onerror = function(){ toast('图片读取失败'); };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(f);
+});
+
 /* ================= 存储 ================= */
 function req2p(r){ return new Promise(function(res, rej){ r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; }); }
 function initStore(){
   return new Promise(function(resolve){
-    var p;
     try{
       var req = indexedDB.open('notepad-db', 1);
       req.onupgradeneeded = function(e){
@@ -232,6 +275,17 @@ function sortNotes(){
   });
 }
 function getNote(id){ return notes.find(function(n){ return n.id === id; }); }
+function normalizeNote(raw){
+  return {
+    id: (raw && raw.id) || uid(),
+    title: String((raw && raw.title) || ''),
+    content: String((raw && raw.content) || ''),
+    created: +(raw && raw.created) || Date.now(),
+    updated: +(raw && raw.updated) || Date.now(),
+    pinned: !!(raw && raw.pinned),
+    published: !!(raw && raw.published)
+  };
+}
 
 function renderList(){
   var q = ($('#searchInput').value || '').trim().toLowerCase();
@@ -319,6 +373,7 @@ function saveNow(){
     updateStorageInfo();
   });
   renderList();
+  schedulePush(); // 本地保存后，稍后自动同步到仓库
 }
 function scheduleSave(){
   $('#saveStatus').textContent = '编辑中…';
@@ -340,6 +395,7 @@ function deleteNote(id){
   store.delete(id);
   renderList();
   updateStorageInfo();
+  schedulePush();
   toast('已删除');
 }
 
@@ -347,8 +403,10 @@ function togglePin(id){
   var n = getNote(id);
   if(!n) return;
   n.pinned = !n.pinned;
+  n.updated = Date.now();
   store.put(n);
   renderList();
+  schedulePush();
   toast(n.pinned ? '已置顶 📌' : '已取消置顶');
 }
 
@@ -543,22 +601,15 @@ $('#importFile').addEventListener('change', function(){
     var list = data && Array.isArray(data.notes) ? data.notes : null;
     if(!list){ toast('这不是有效的备份文件'); return; }
     var changed = 0;
-    var next = function(){ 
+    var next = function(){
       renderList(); updateStorageInfo();
       toast('导入完成：更新/新增 ' + changed + ' 条');
+      schedulePush();
     };
     var chain = Promise.resolve();
     list.forEach(function(raw){
       chain = chain.then(function(){
-        var n = {
-          id: (raw && raw.id) || uid(),
-          title: String((raw && raw.title) || ''),
-          content: String((raw && raw.content) || ''),
-          created: +(raw && raw.created) || Date.now(),
-          updated: +(raw && raw.updated) || Date.now(),
-          pinned: !!(raw && raw.pinned),
-          published: !!(raw && raw.published)
-        };
+        var n = normalizeNote(raw);
         var exist = getNote(n.id);
         if(exist && exist.updated >= n.updated) return; // 已有更新的内容则跳过
         changed++;
@@ -572,10 +623,11 @@ $('#importFile').addEventListener('change', function(){
   fr.readAsText(f, 'utf-8');
 });
 
-/* ================= 发布到博客 ================= */
+/* ================= GitHub 同步 ================= */
 var GH_REPO = 'Gil0407/notepad';   // ← 你的 用户名/仓库名
 var GH_BRANCH = 'main';
-var GH_FILE = 'blog.json';
+var GH_BLOG_FILE = 'blog.json';
+var GH_NOTES_FILE = 'notes.json';
 
 function ghHeaders(token){
   return { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
@@ -583,40 +635,137 @@ function ghHeaders(token){
 function getToken(){
   var t = localStorage.getItem('notepad-gh-token');
   if(!t){
-    t = prompt('首次发布需要 GitHub Token（fine-grained，仅授权本仓库 contents 读写）：');
+    t = prompt('首次发布/同步需要 GitHub Token（fine-grained，仅授权本仓库 contents 读写）：');
     if(!t) return null;
     t = t.trim();
     localStorage.setItem('notepad-gh-token', t);
   }
   return localStorage.getItem('notepad-gh-token');
 }
+function getTokenSilent(){ return localStorage.getItem('notepad-gh-token'); }
+
+/* 读取仓库里的 json 文件；不存在返回 { data:null, sha:null } */
+function ghGetFile(file, token){
+  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
+    .then(function(r){
+      if(r.status === 404) return { data: null, sha: null };
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(function(j){
+        var data = null;
+        try{ data = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))))); }catch(e){}
+        return { data: data, sha: j.sha };
+      });
+    });
+}
+/* 写入仓库 json 文件 */
+function ghPutFile(file, obj, sha, token, message){
+  var body = {
+    message: message,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2)))),
+    branch: GH_BRANCH
+  };
+  if(sha) body.sha = sha; // 更新已有文件必须带 sha
+  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file, {
+    method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
+  }).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+  });
+}
+/* 合并本地与远程笔记：同 id 保留 updated 较新的一方，互不覆盖 */
+function mergeNotes(localList, remoteList){
+  var map = {};
+  localList.forEach(function(n){ map[n.id] = n; });
+  (remoteList || []).forEach(function(r){
+    var l = map[r.id];
+    if(!l) map[r.id] = normalizeNote(r);
+    else if((r.updated || 0) > (l.updated || 0)) map[r.id] = normalizeNote(r);
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+
+/* ---------- 多端笔记同步 ---------- */
+function pullNotes(){
+  var token = getTokenSilent();
+  if(!token) return Promise.resolve();
+  return ghGetFile(GH_NOTES_FILE, token).then(function(remote){
+    if(!remote.data || !Array.isArray(remote.data.notes)) return;
+    var before = notes.length;
+    notes = mergeNotes(notes, remote.data.notes);
+    // 把远程较新的内容写回本地存储
+    var chain = Promise.resolve();
+    notes.forEach(function(n){ chain = chain.then(function(){ return store.put(n); }); });
+    return chain.then(function(){
+      sortNotes();
+      renderList();
+      if(currentId && getNote(currentId)){
+        var cur = getNote(currentId);
+        titleInput.value = cur.title || '';
+        editor.innerHTML = cur.content || '';
+        $('#saveStatus').textContent = '已同步 ' + fmtTime(cur.updated);
+      }
+      if(notes.length !== before) toast('已从其它设备同步 ' + notes.length + ' 条笔记');
+    });
+  }).catch(function(){ /* 离线或没发布过 notes.json 时静默忽略 */ });
+}
+
+var pushing = false;
+function pushNotes(retry){
+  if(pushing) return Promise.resolve();
+  var token = getTokenSilent();
+  if(!token) return Promise.resolve();
+  pushing = true;
+  return ghGetFile(GH_NOTES_FILE, token).then(function(remote){
+    // 先合并远程，避免覆盖其它设备刚写的内容
+    notes = mergeNotes(notes, (remote.data && remote.data.notes) || []);
+    return ghPutFile(GH_NOTES_FILE,
+      { app: 'notepad', version: 1, syncedAt: Date.now(), notes: notes },
+      remote.sha, token,
+      'sync notes ' + new Date().toISOString());
+  }).then(function(){
+    sortNotes(); renderList();
+  }).catch(function(e){
+    if(!retry && /HTTP 409|HTTP 422/.test(e.message)) return pushNotes(true); // sha 冲突，重取重试一次
+  }).then(function(){
+    pushing = false;
+  });
+}
+function schedulePush(){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(function(){ pushNotes(); }, 8000); // 停止编辑 8 秒后自动推送
+}
+
+/* ---------- 发布到博客（增量合并，不再整文件覆盖） ---------- */
 function publishToBlog(){
   var pub = notes.filter(function(n){ return n.published; });
   if(!pub.length){ toast('先悬停笔记点 ◌ 标记要公开的'); return; }
   var token = getToken();
   if(!token) return;
-  var api = 'https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE + '?ref=' + GH_BRANCH;
   toast('正在发布…');
-  fetch(api, { headers: ghHeaders(token) })
-    .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
-    .then(function(res){
-      var body = {
-        message: 'publish blog ' + new Date().toISOString(),
-        content: btoa(unescape(encodeURIComponent(JSON.stringify({
-          app: 'notepad-blog', version: 1, author: GH_REPO.split('/')[0], publishedAt: Date.now(), notes: pub
-        }, null, 2)))),
-        branch: GH_BRANCH
-      };
-      if(res.ok && res.json.sha) body.sha = res.json.sha;  // 更新已有文件需要 sha
-      return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE, {
-        method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
-      });
-    })
-    .then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      toast('已发布 ' + pub.length + ' 篇 ✓ 约1分钟后可见');
-    })
-    .catch(function(e){ toast('发布失败：' + e.message + '（检查 Token 权限）'); });
+  ghGetFile(GH_BLOG_FILE, token).then(function(remote){
+    var remoteNotes = (remote.data && Array.isArray(remote.data.notes)) ? remote.data.notes : [];
+    var pubMap = {};
+    pub.forEach(function(n){ pubMap[n.id] = n; });
+    // 1) 远程里仍被选中的：保留原顺序，内容用本地最新版
+    var merged = remoteNotes.filter(function(r){ return pubMap[r.id]; })
+                            .map(function(r){ return pubMap[r.id]; });
+    // 2) 本地新选中、远程没有的：追加到后面
+    var inMerged = {};
+    merged.forEach(function(n){ inMerged[n.id] = 1; });
+    pub.forEach(function(n){ if(!inMerged[n.id]) merged.push(n); });
+    // 3) 远程里没选中的自动删除（不在 merged 里即被丢弃）
+    var payload = {
+      app: 'notepad-blog', version: 1,
+      author: GH_REPO.split('/')[0],
+      avatar: getAvatar(),
+      publishedAt: Date.now(),
+      notes: merged
+    };
+    return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString());
+  }).then(function(){
+    toast('已发布 ' + pub.length + ' 篇 ✓ 约1分钟后可见');
+  }).catch(function(e){
+    toast('发布失败：' + e.message + '（检查 Token 权限）');
+  });
 }
 $('#publishBtn').addEventListener('click', publishToBlog);
 
@@ -682,11 +831,20 @@ window.addEventListener('keydown', function(e){
   if((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')){
     e.preventDefault();
     saveNow();
+    pushNotes();
     toast('已保存 ✓');
   }
 });
 window.addEventListener('beforeunload', saveNow);
-document.addEventListener('visibilitychange', function(){ if(document.hidden) saveNow(); });
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){
+    saveNow();
+    clearTimeout(pushTimer);
+    pushNotes(); // 切走时立刻推送一次
+  }else{
+    pullNotes(); // 回到页面时拉取其它设备的修改
+  }
+});
 
 /* ================= 启动 ================= */
 function makeWelcomeNote(){
@@ -707,6 +865,8 @@ function makeWelcomeNote(){
       '<p>🖼️ 插入图片的三种方式：点工具栏「图片」按钮选择文件、<b>Ctrl+V 直接粘贴截图</b>、把图片文件<b>拖进编辑区</b></p>' +
       '<p>🔍 左侧列表可以搜索笔记；悬停笔记可 📌 置顶或 🗑️ 删除；点 ◌ 可 🌍 公开到博客</p>' +
       '<p>💾 左下角可以导出 / 导入 JSON 备份，建议偶尔备份一次</p>' +
+      '<p>🌍 配置好 GitHub Token 后，笔记会<b>自动在多台设备间同步</b>：手机写完，电脑上刷新就能看到</p>' +
+      '<p>👤 点左上角头像可以更换头像，发布博客后博客页会显示</p>' +
       '<p>🌙 右上角可以切换深色模式；手机上也能用</p>' +
       '<p>祝用得开心！这条笔记可以随时删掉。</p>',
     created: Date.now(),
@@ -730,11 +890,15 @@ function init(){
     }
     sortNotes();
     applyTheme();
+    applyAvatar();
     renderList();
     updateStorageInfo();
     if(notes.length) selectNote(notes[0].id); else showEmpty(true);
+    // 启动后从仓库拉取其它设备的修改（已配置过 Token 才生效）
+    return pullNotes();
   }).catch(function(){
     applyTheme();
+    applyAvatar();
     showEmpty(true);
   });
 }
@@ -743,5 +907,6 @@ try{ document.execCommand('styleWithCSS', false, false); }catch(e){}
 init();
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4655f3c58dd6497fb7ddb85b68480db7","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
