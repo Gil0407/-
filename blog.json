@@ -2,14 +2,23 @@
   "app": "notepad-blog",
   "version": 1,
   "author": "Gil0407",
-  "publishedAt": 1792761020259,
+  "publishedAt": 1792761590904,
   "notes": [
+    {
+      "id": "nmvkzybaxknnl3k",
+      "title": "",
+      "content": "现在想做一个头像功能",
+      "created": 1792761573561,
+      "updated": 1792761585935,
+      "pinned": false,
+      "published": true
+    },
     {
       "id": "nmvkzlwlma0y5n0",
       "title": "",
       "content": "我发现一个问题，在电脑上发会把手机上发的覆盖掉",
       "created": 1792760994634,
-      "updated": 1792761014464,
+      "updated": 1792761573557,
       "pinned": false,
       "published": true
     },
