@@ -1,8 +1,17 @@
 {
   "app": "notepad",
   "version": 1,
-  "syncedAt": 1792762988024,
+  "syncedAt": 1792763115747,
   "notes": [
+    {
+      "id": "nmvl0qir2l2y29n",
+      "title": "",
+      "content": "测试",
+      "created": 1792762889582,
+      "updated": 1792763115378,
+      "pinned": false,
+      "published": true
+    },
     {
       "id": "nmvl0rf6i94mqww",
       "title": "",
@@ -18,6 +27,15 @@
       "content": "现在想做一个头像功能",
       "created": 1792761573561,
       "updated": 1792762931607,
+      "pinned": false,
+      "published": true
+    },
+    {
+      "id": "nmvkzkqpt0v0xn5",
+      "title": "发一条",
+      "content": "发一条",
+      "created": 1792760940353,
+      "updated": 1792762889582,
       "pinned": false,
       "published": true
     },
