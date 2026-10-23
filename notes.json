@@ -1,7 +1,7 @@
 {
   "app": "notepad",
   "version": 1,
-  "syncedAt": 1792768968733,
+  "syncedAt": 1792769168956,
   "notes": [
     {
       "id": "nmvl4cqn59rog83",
@@ -9,7 +9,8 @@
       "content": "",
       "created": 1792768965089,
       "updated": 1792768968701,
-      "pinned": false
+      "pinned": false,
+      "published": false
     },
     {
       "id": "nmvl47rutkyb52o",
