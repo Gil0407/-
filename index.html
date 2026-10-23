@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>我的记事本</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📝%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#8a919f;
+    --border:#e5e7eb; --accent:#4f6ef7; --accent-weak:#eef1fe;
+    --hover:#f2f4f7; --shadow:0 1px 3px rgba(0,0,0,.08);
+    color-scheme:light;
+  }
+  [data-theme="dark"]{
+    --bg:#17181c; --panel:#1f2127; --text:#e8eaf0; --muted:#7d8494;
+    --border:#2c2f37; --accent:#6d87ff; --accent-weak:#262b3d;
+    --hover:#262932; --shadow:0 1px 3px rgba(0,0,0,.4);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{height:100%;margin:0}
+  body{font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.7;background:var(--bg);color:var(--text);}
+  button{font:inherit;cursor:pointer}
+  #app{display:flex;height:100vh;overflow:hidden}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---------- 侧栏 ---------- */
+  #sidebar{width:300px;min-width:300px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:transform .25s;}
+  #sidebar header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;}
+  #sidebar h1{font-size:19px;margin:0}
+  .iconbtn{background:none;border:none;color:var(--muted);font-size:16px;padding:6px 8px;border-radius:8px}
+  .iconbtn:hover{background:var(--hover);color:var(--text)}
+  #newNoteBtn{margin:6px 16px 10px;padding:10px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:15px;font-weight:600}
+  #newNoteBtn:hover{filter:brightness(1.08)}
+  #searchInput{margin:0 16px 10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;font-size:13px;width:calc(100% - 32px)}
+  #searchInput:focus{border-color:var(--accent)}
+  #noteList{flex:1;overflow-y:auto;padding:0 10px 10px}
+  .note-item{padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:6px;border:1px solid transparent}
+  .note-item:hover{background:var(--hover)}
+  .note-item.active{background:var(--accent-weak);border-color:var(--accent)}
+  .ni-title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .ni-title .pin-flag{font-size:12px;flex:none}
+  .ni-title-text{overflow:hidden;text-overflow:ellipsis}
+  .ni-snippet{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .ni-meta{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11.5px;color:var(--muted)}
+  .ni-actions{display:none;gap:2px}
+  .note-item:hover .ni-actions{display:flex}
+  .ni-actions button{background:none;border:none;color:var(--muted);padding:2px 5px;border-radius:6px;font-size:12px}
+  .ni-actions button:hover{color:var(--text);background:var(--bg)}
+  #sidebar footer{border-top:1px solid var(--border);padding:10px 16px;display:flex;flex-direction:column;gap:7px}
+  .backup-row{display:flex;gap:8px}
+  .backup-row button{flex:1;padding:6px;border:1px solid var(--border);background:none;border-radius:8px;color:var(--muted);font-size:12.5px}
+  .backup-row button:hover{color:var(--text);border-color:var(--accent)}
+  #storageInfo{font-size:11.5px;color:var(--muted)}
+
+  /* ---------- 主区 ---------- */
+  #main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  #emptyState{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted)}
+  #emptyState .big{font-size:54px}
+  #emptyState p{margin:0}
+  #emptyNewBtn{margin-top:10px;padding:9px 22px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
+  #editorWrap{flex:1;display:flex;flex-direction:column;min-height:0}
+  #titleInput{border:none;outline:none;background:transparent;font-size:24px;font-weight:700;color:var(--text);padding:22px 32px 4px;font-family:inherit}
+  #titleInput::placeholder{color:var(--muted);font-weight:400}
+  #toolbar{display:flex;gap:2px;align-items:center;padding:6px 24px;flex-wrap:wrap}
+  #toolbar button{border:none;background:none;padding:6px 10px;border-radius:8px;font-size:14px;color:var(--text);line-height:1.4}
+  #toolbar button:hover{background:var(--hover)}
+  #toolbar button.active{background:var(--accent-weak);color:var(--accent)}
+  .tb-sep{width:1px;height:18px;background:var(--border);margin:0 6px;flex:none}
+  #editor{flex:1;overflow-y:auto;padding:8px 32px 48px;outline:none;font-size:16px;line-height:1.85;word-wrap:break-word;overflow-wrap:break-word}
+  #editor img{display:block;max-width:100%;height:auto;border-radius:10px;margin:6px 0;box-shadow:var(--shadow)}
+  #editor:empty::before{content:attr(data-placeholder);color:var(--muted);pointer-events:none}
+  #editor h2{font-size:1.35em;margin:.8em 0 .3em}
+  #editor blockquote{margin:.6em 0;padding:.1em 1em;border-left:4px solid var(--accent);color:var(--muted);background:var(--accent-weak);border-radius:0 8px 8px 0}
+  #editor hr{border:none;border-top:1px solid var(--border);margin:1.2em 0}
+  #editor ul,#editor ol{padding-left:1.5em}
+  #editor a{color:var(--accent)}
+  #statusBar{display:flex;justify-content:space-between;padding:8px 32px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);background:var(--panel)}
+  #statusBar span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 其它 ---------- */
+  #toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:rgba(30,32,38,.92);color:#fff;padding:9px 18px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:all .25s;z-index:99}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #menuBtn{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:16px;box-shadow:var(--shadow)}
+  #scrim{display:none}
+  @media(max-width:860px){
+    #menuBtn{display:block}
+    #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:40;transform:translateX(-105%);box-shadow:0 0 30px rgba(0,0,0,.25)}
+    body.sidebar-open #sidebar{transform:none}
+    body.sidebar-open #scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:35}
+    #titleInput{padding:64px 20px 4px}
+    #toolbar{padding:6px 12px}
+    #editor{padding:8px 20px 48px}
+    #statusBar{padding:8px 20px}
+  }
+</style>
+</head>
+<body>
+<button id="menuBtn" title="笔记列表">☰</button>
+<div id="scrim"></div>
+<div id="app">
+  <aside id="sidebar">
+    <header>
+      <h1>📝 记事本</h1>
+      <button id="themeToggle" class="iconbtn" title="切换深色/浅色模式">🌙</button>
+    </header>
+    <button id="newNoteBtn">＋ 新建笔记</button>
+    <input id="searchInput" type="text" placeholder="搜索笔记…" />
+    <div id="noteList"></div>
+    <footer>
+      <div class="backup-row">
+        <button id="exportBtn">⬇ 导出备份</button>
+        <button id="importBtn">⬆ 导入备份</button>
+      </div>
+      <span id="storageInfo"></span>
+    </footer>
+  </aside>
+  <main id="main">
+    <div id="emptyState">
+      <div class="big">📝</div>
+      <p>选择左侧笔记，或新建一条</p>
+      <button id="emptyNewBtn">＋ 新建笔记</button>
+    </div>
+    <div id="editorWrap" hidden>
+      <input id="titleInput" type="text" placeholder="标题" />
+      <div id="toolbar">
+        <button data-cmd="bold" title="加粗 Ctrl+B"><b>B</b></button>
+        <button data-cmd="italic" title="斜体 Ctrl+I"><i>I</i></button>
+        <button data-cmd="underline" title="下划线 Ctrl+U"><u>U</u></button>
+        <button data-cmd="strikeThrough" title="删除线"><s>S</s></button>
+        <span class="tb-sep"></span>
+        <button data-cmd="formatBlock" title="标题/正文切换"><b style="font-size:15px">H</b></button>
+        <button data-cmd="insertUnorderedList" title="无序列表">•&nbsp;列表</button>
+        <button data-cmd="insertOrderedList" title="有序列表">1. 列表</button>
+        <span class="tb-sep"></span>
+        <button data-cmd="insertHorizontalRule" title="分隔线">—</button>
+        <button data-cmd="insertImage" title="插入图片（也可以直接 Ctrl+V 粘贴截图，或把图片文件拖进来）">🖼️ 图片</button>
+      </div>
+      <div id="editor" contenteditable="true" data-placeholder="开始输入内容…支持粘贴、拖拽图片"></div>
+      <div id="statusBar">
+        <span id="saveStatus"></span>
+        <span id="wordCount"></span>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast"></div>
+<input type="file" id="imageInput" accept="image/*" multiple hidden />
+<input type="file" id="importFile" accept=".json,application/json" hidden />
+
+<script>
+(function(){
+'use strict';
+var $ = function(s){ return document.querySelector(s); };
+var editor = $('#editor'), titleInput = $('#titleInput');
+var notes = [], currentId = null, saveTimer = null, useLS = false, store = null;
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function uid(){ return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function pad(n){ return String(n).padStart(2, '0'); }
+function fmtTime(ts){
+  var d = new Date(ts), now = new Date();
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  if(d.toDateString() === now.toDateString()) return hm;
+  var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '-';
+  return y + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + hm;
+}
+var stripDiv = document.createElement('div');
+function stripHtml(html){ stripDiv.innerHTML = html; return stripDiv.textContent || ''; }
+
+/* ================= 存储 ================= */
+function req2p(r){ return new Promise(function(res, rej){ r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; }); }
+function initStore(){
+  return new Promise(function(resolve){
+    var p;
+    try{
+      var req = indexedDB.open('notepad-db', 1);
+      req.onupgradeneeded = function(e){
+        var db = e.target.result;
+        if(!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' });
+      };
+      req.onsuccess = function(){
+        var db = req.result;
+        resolve({
+          getAll: function(){ return req2p(db.transaction('notes','readonly').objectStore('notes').getAll()); },
+          put: function(n){ return req2p(db.transaction('notes','readwrite').objectStore('notes').put(n)); },
+          delete: function(id){ return req2p(db.transaction('notes','readwrite').objectStore('notes').delete(id)); }
+        });
+      };
+      req.onerror = function(){ rejectLS(); };
+      req.onblocked = function(){ rejectLS(); };
+    }catch(e){ rejectLS(); }
+    function rejectLS(){ resolve(null); }
+  }).then(function(s){
+    if(s){ store = s; }
+    else{
+      useLS = true;
+      store = {
+        _key: 'notepad-notes',
+        _data: JSON.parse(localStorage.getItem('notepad-notes') || '[]'),
+        _save: function(){ localStorage.setItem(this._key, JSON.stringify(this._data)); },
+        getAll: function(){ return Promise.resolve(this._data.slice()); },
+        put: function(n){
+          var i = this._data.findIndex(function(x){ return x.id === n.id; });
+          if(i >= 0) this._data[i] = n; else this._data.push(n);
+          this._save(); return Promise.resolve();
+        },
+        delete: function(id){
+          this._data = this._data.filter(function(x){ return x.id !== id; });
+          this._save(); return Promise.resolve();
+        }
+      };
+    }
+  });
+}
+
+/* ================= 笔记操作 ================= */
+function sortNotes(){
+  notes.sort(function(a, b){
+    return ((b.pinned?1:0) - (a.pinned?1:0)) || ((b.updated||0) - (a.updated||0));
+  });
+}
+function getNote(id){ return notes.find(function(n){ return n.id === id; }); }
+
+function renderList(){
+  var q = ($('#searchInput').value || '').trim().toLowerCase();
+  sortNotes();
+  var list = $('#noteList');
+  list.innerHTML = '';
+  var frag = document.createDocumentFragment();
+  var shown = 0;
+  notes.forEach(function(n){
+    var text = ((n.title||'') + ' ' + stripHtml(n.content||'')).toLowerCase();
+    if(q && text.indexOf(q) === -1) return;
+    shown++;
+    var snippet = stripHtml(n.content||'').trim().slice(0, 60);
+    var item = document.createElement('div');
+    item.className = 'note-item' + (n.id === currentId ? ' active' : '');
+    item.dataset.id = n.id;
+    item.innerHTML =
+      '<div class="ni-title">' + (n.pinned ? '<span class="pin-flag">📌</span>' : '') +
+        '<span class="ni-title-text">' + esc(n.title || '无标题') + '</span></div>' +
+      (snippet ? '<div class="ni-snippet">' + esc(snippet) + '</div>' : '') +
+      '<div class="ni-meta"><span>' + fmtTime(n.updated || n.created || 0) + '</span>' +
+        '<span class="ni-actions">' +
+          '<button data-act="pin" title="置顶/取消置顶">📌</button>' +
+          '<button data-act="del" title="删除">🗑️</button>' +
+        '</span></div>';
+    frag.appendChild(item);
+  });
+  if(shown === 0){
+    var d = document.createElement('div');
+    d.style.cssText = 'text-align:center;color:var(--muted);font-size:13px;padding:20px 0';
+    d.textContent = q ? '没有匹配的笔记' : '还没有笔记，点击上方按钮新建';
+    frag.appendChild(d);
+  }
+  list.appendChild(frag);
+}
+
+function showEmpty(show){
+  $('#emptyState').hidden = !show;
+  $('#editorWrap').hidden = show;
+}
+
+function selectNote(id){
+  saveNow();
+  var n = getNote(id);
+  if(!n) return;
+  currentId = id;
+  titleInput.value = n.title || '';
+  editor.innerHTML = n.content || '';
+  showEmpty(false);
+  $('#saveStatus').textContent = n.updated ? '已保存 ' + fmtTime(n.updated) : '';
+  updateWordCount();
+  renderList();
+  editor.scrollTop = 0;
+}
+
+function newNote(){
+  saveNow();
+  var n = { id: uid(), title: '', content: '', created: Date.now(), updated: Date.now(), pinned: false };
+  notes.push(n);
+  store.put(n);
+  currentId = n.id;
+  titleInput.value = '';
+  editor.innerHTML = '';
+  showEmpty(false);
+  $('#saveStatus').textContent = '';
+  renderList();
+  updateWordCount();
+  document.body.classList.remove('sidebar-open');
+  titleInput.focus();
+}
+
+function saveNow(){
+  if(!currentId) return;
+  clearTimeout(saveTimer);
+  var n = getNote(currentId);
+  if(!n) return;
+  n.title = titleInput.value.trim();
+  n.content = editor.innerHTML;
+  n.updated = Date.now();
+  $('#saveStatus').textContent = '保存中…';
+  store.put(n).then(function(){
+    $('#saveStatus').textContent = '已保存 ' + fmtTime(n.updated);
+    updateStorageInfo();
+  });
+  renderList();
+}
+function scheduleSave(){
+  $('#saveStatus').textContent = '编辑中…';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 300);
+}
+
+function deleteNote(id){
+  var n = getNote(id);
+  if(!n) return;
+  if(!confirm('确定删除「' + (n.title || '无标题') + '」吗？删除后无法恢复。')) return;
+  clearTimeout(saveTimer);
+  if(currentId === id){
+    currentId = null;
+    var rest = notes.filter(function(x){ return x.id !== id; });
+    if(rest.length) selectNote(rest[0].id); else { showEmpty(true); renderList(); }
+  }
+  notes = notes.filter(function(x){ return x.id !== id; });
+  store.delete(id);
+  renderList();
+  updateStorageInfo();
+  toast('已删除');
+}
+
+function togglePin(id){
+  var n = getNote(id);
+  if(!n) return;
+  n.pinned = !n.pinned;
+  store.put(n);
+  renderList();
+  toast(n.pinned ? '已置顶 📌' : '已取消置顶');
+}
+
+function updateWordCount(){
+  var t = editor.innerText.trim();
+  var count = t ? t.replace(/\s+/g, '').length : 0;
+  $('#wordCount').textContent = count + ' 字';
+}
+
+/* ================= 图片 ================= */
+function processImage(file){
+  return new Promise(function(resolve){
+    if(!file || !/^image\//.test(file.type)){ resolve(null); return; }
+    var fr = new FileReader();
+    fr.onload = function(){
+      var url = fr.result;
+      // GIF 有动画、小图不处理，直接原样插入
+      if(file.type === 'image/gif' || file.size <= 200 * 1024){ resolve(url); return; }
+      var img = new Image();
+      img.onload = function(){
+        var MAX = 1280;
+        var scale = Math.min(1, MAX / img.width, MAX / img.height);
+        if(scale >= 1 && file.size <= 500 * 1024){ resolve(url); return; }
+        var w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        var out = c.toDataURL('image/jpeg', 0.85);
+        if(out.length > url.length && url.length < 900 * 1024) out = url; // 处理后反而更大就保留原图
+        resolve(out);
+      };
+      img.onerror = function(){ resolve(url); };
+      img.src = url;
+    };
+    fr.onerror = function(){ resolve(null); };
+    fr.readAsDataURL(file);
+  });
+}
+
+function focusEditorEnd(){
+  editor.focus();
+  var r = document.createRange();
+  r.selectNodeContents(editor);
+  r.collapse(false);
+  var s = getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+}
+function ensureCaretInEditor(){
+  var sel = getSelection();
+  if(!sel.anchorNode || !editor.contains(sel.anchorNode)) focusEditorEnd();
+}
+
+function insertImages(files){
+  if(!currentId){ toast('请先新建或选择一条笔记'); return; }
+  showEmpty(false);
+  var list = Array.prototype.slice.call(files || []);
+  if(!list.length) return;
+  var done = 0;
+  list.forEach(function(f){
+    processImage(f).then(function(url){
+      if(!url){ toast('不支持的文件类型：' + f.name); return; }
+      ensureCaretInEditor();
+      document.execCommand('insertHTML', false, '<img src="' + url + '" alt="' + esc(f.name) + '"><br>');
+      done++;
+      if(done === list.length){ scheduleSave(); toast('已插入 ' + done + ' 张图片'); }
+    });
+  });
+}
+
+// 粘贴截图
+editor.addEventListener('paste', function(e){
+  var items = (e.clipboardData && e.clipboardData.items) || [];
+  for(var i = 0; i < items.length; i++){
+    if(items[i].type && items[i].type.indexOf('image/') === 0){
+      e.preventDefault();
+      insertImages([items[i].getAsFile()]);
+      return;
+    }
+  }
+});
+// 拖拽图片文件进来
+editor.addEventListener('dragover', function(e){ e.preventDefault(); });
+editor.addEventListener('drop', function(e){
+  var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function(f){ return /^image\//.test(f.type); });
+  if(files.length){
+    e.preventDefault();
+    // 把光标放到落点
+    try{
+      var range;
+      if(document.caretRangeFromPoint){ range = document.caretRangeFromPoint(e.clientX, e.clientY); }
+      else if(document.caretPositionFromPoint){
+        var pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+        range = document.createRange(); range.setStart(pos.offsetNode, pos.offset);
+      }
+      if(range){
+        var s = getSelection(); s.removeAllRanges(); s.addRange(range);
+      }
+    }catch(err){ ensureCaretInEditor(); }
+    insertImages(files);
+  }
+});
+// 防止编辑器里的图片被误拖走
+editor.addEventListener('dragstart', function(e){
+  if(e.target && e.target.tagName === 'IMG') e.preventDefault();
+});
+$('#imageInput').addEventListener('change', function(){
+  insertImages(this.files);
+  this.value = '';
+});
+
+/* ================= 工具栏 ================= */
+function currentBlock(){
+  var sel = getSelection();
+  if(!sel.rangeCount) return null;
+  var n = sel.getRangeAt(0).startContainer;
+  if(n.nodeType === 3) n = n.parentNode;
+  while(n && n !== editor){
+    if(n.parentElement === editor) return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+$('#toolbar').addEventListener('mousedown', function(e){
+  if(e.target.closest('button')) e.preventDefault(); // 保持编辑区选区
+});
+$('#toolbar').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-cmd]');
+  if(!b) return;
+  if(!currentId){ toast('请先新建或选择一条笔记'); return; }
+  editor.focus();
+  var cmd = b.dataset.cmd;
+  if(cmd === 'formatBlock'){
+    var isH = currentBlock() && currentBlock().tagName === 'H2';
+    document.execCommand('formatBlock', false, isH ? 'p' : 'h2');
+  }else if(cmd === 'insertImage'){
+    $('#imageInput').click();
+    return;
+  }else{
+    document.execCommand(cmd, false, null);
+  }
+  scheduleSave();
+});
+// 工具栏按钮激活状态
+document.addEventListener('selectionchange', function(){
+  var sel = getSelection();
+  if(!sel.anchorNode || !editor.contains(sel.anchorNode)) return;
+  var states = ['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'];
+  document.querySelectorAll('#toolbar button[data-cmd]').forEach(function(btn){
+    var cmd = btn.dataset.cmd;
+    if(states.indexOf(cmd) === -1){ btn.classList.remove('active'); return; }
+    var on = false;
+    try{ on = document.queryCommandState(cmd); }catch(err){}
+    btn.classList.toggle('active', !!on);
+  });
+});
+
+/* ================= 备份导入导出 ================= */
+$('#exportBtn').addEventListener('click', function(){
+  saveNow();
+  var data = { app: 'notepad', version: 1, exportedAt: new Date().toISOString(), notes: notes };
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var d = new Date();
+  var name = '记事本备份-' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '.json';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
+  toast('已导出 ' + notes.length + ' 条笔记');
+});
+$('#importBtn').addEventListener('click', function(){ $('#importFile').click(); });
+$('#importFile').addEventListener('change', function(){
+  var f = this.files[0];
+  this.value = '';
+  if(!f) return;
+  var fr = new FileReader();
+  fr.onload = function(){
+    var data;
+    try{ data = JSON.parse(fr.result); }catch(err){ toast('文件格式不正确'); return; }
+    var list = data && Array.isArray(data.notes) ? data.notes : null;
+    if(!list){ toast('这不是有效的备份文件'); return; }
+    var changed = 0;
+    var next = function(){ 
+      renderList(); updateStorageInfo();
+      toast('导入完成：更新/新增 ' + changed + ' 条');
+    };
+    var chain = Promise.resolve();
+    list.forEach(function(raw){
+      chain = chain.then(function(){
+        var n = {
+          id: (raw && raw.id) || uid(),
+          title: String((raw && raw.title) || ''),
+          content: String((raw && raw.content) || ''),
+          created: +(raw && raw.created) || Date.now(),
+          updated: +(raw && raw.updated) || Date.now(),
+          pinned: !!(raw && raw.pinned)
+        };
+        var exist = getNote(n.id);
+        if(exist && exist.updated >= n.updated) return; // 已有更新的内容则跳过
+        changed++;
+        var i = notes.indexOf(exist);
+        if(i >= 0) notes[i] = n; else notes.push(n);
+        return store.put(n);
+      });
+    });
+    chain.then(next).catch(next);
+  };
+  fr.readAsText(f, 'utf-8');
+});
+
+/* ================= 其它交互 ================= */
+var toastTimer = null;
+function toast(msg){
+  var t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+
+function updateStorageInfo(){
+  var el = $('#storageInfo');
+  if(useLS){ el.textContent = '存储模式：localStorage（建议经常导出备份）'; return; }
+  if(navigator.storage && navigator.storage.estimate){
+    navigator.storage.estimate().then(function(est){
+      el.textContent = '已存储 ' + (est.usage / 1048576).toFixed(1) + ' MB';
+    }).catch(function(){});
+  }
+}
+
+function applyTheme(){
+  var t = localStorage.getItem('notepad-theme') || 'light';
+  document.documentElement.dataset.theme = t;
+  $('#themeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+$('#themeToggle').addEventListener('click', function(){
+  var cur = document.documentElement.dataset.theme;
+  localStorage.setItem('notepad-theme', cur === 'dark' ? 'light' : 'dark');
+  applyTheme();
+});
+
+$('#newNoteBtn').addEventListener('click', newNote);
+$('#emptyNewBtn').addEventListener('click', newNote);
+$('#searchInput').addEventListener('input', renderList);
+titleInput.addEventListener('input', scheduleSave);
+editor.addEventListener('input', function(){ scheduleSave(); updateWordCount(); });
+editor.addEventListener('keydown', function(e){
+  if(e.key === 'Tab'){
+    e.preventDefault();
+    document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+  }
+});
+$('#noteList').addEventListener('click', function(e){
+  var item = e.target.closest('.note-item');
+  if(!item) return;
+  var id = item.dataset.id;
+  var btn = e.target.closest('button');
+  if(btn){
+    if(btn.dataset.act === 'del'){ deleteNote(id); return; }
+    if(btn.dataset.act === 'pin'){ togglePin(id); return; }
+  }
+  selectNote(id);
+  document.body.classList.remove('sidebar-open');
+});
+$('#menuBtn').addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); });
+$('#scrim').addEventListener('click', function(){ document.body.classList.remove('sidebar-open'); });
+
+window.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')){
+    e.preventDefault();
+    saveNow();
+    toast('已保存 ✓');
+  }
+});
+window.addEventListener('beforeunload', saveNow);
+document.addEventListener('visibilitychange', function(){ if(document.hidden) saveNow(); });
+
+/* ================= 启动 ================= */
+function makeWelcomeNote(){
+  var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='560' height='150'>" +
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
+    "<stop offset='0' stop-color='#4f6ef7'/><stop offset='1' stop-color='#9f5ff7'/>" +
+    "</linearGradient></defs>" +
+    "<rect width='560' height='150' rx='14' fill='url(#g)'/>" +
+    "<text x='50%' y='54%' font-size='26' fill='#fff' text-anchor='middle' dominant-baseline='middle' font-family='sans-serif'>图片也可以放进来 🖼️</text></svg>";
+  var demo = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+  return {
+    id: uid(),
+    title: '欢迎使用记事本 🎉',
+    content:
+      '<p>这是一个完全在<b>本地运行</b>的记事本：内容自动保存在浏览器里，不用联网、不用登录。</p>' +
+      '<img src="' + demo + '" alt="示例图片">' +
+      '<p>✍️ 直接输入文字即可，内容会<b>自动保存</b></p>' +
+      '<p>🖼️ 插入图片的三种方式：点工具栏「图片」按钮选择文件、<b>Ctrl+V 直接粘贴截图</b>、把图片文件<b>拖进编辑区</b></p>' +
+      '<p>🔍 左侧列表可以搜索笔记；悬停笔记可 📌 置顶或 🗑️ 删除</p>' +
+      '<p>💾 左下角可以导出 / 导入 JSON 备份，建议偶尔备份一次</p>' +
+      '<p>🌙 右上角可以切换深色模式；手机上也能用</p>' +
+      '<p>祝用得开心！这条笔记可以随时删掉。</p>',
+    created: Date.now(),
+    updated: Date.now(),
+    pinned: false
+  };
+}
+
+function init(){
+  return initStore().then(function(){
+    return store.getAll();
+  }).then(function(all){
+    notes = (all || []).filter(function(n){ return n && n.id; });
+    if(!localStorage.getItem('notepad-initialized')){
+      localStorage.setItem('notepad-initialized', '1');
+      if(notes.length === 0){
+        var w = makeWelcomeNote();
+        notes.push(w);
+        store.put(w);
+      }
+    }
+    sortNotes();
+    applyTheme();
+    renderList();
+    updateStorageInfo();
+    if(notes.length) selectNote(notes[0].id); else showEmpty(true);
+  }).catch(function(){
+    applyTheme();
+    showEmpty(true);
+  });
+}
+try{ document.execCommand('defaultParagraphSeparator', false, 'p'); }catch(e){}
+try{ document.execCommand('styleWithCSS', false, false); }catch(e){}
+init();
+})();
+</script>
+</body>
+</html>
