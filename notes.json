@@ -1,15 +1,24 @@
 {
   "app": "notepad",
   "version": 1,
-  "syncedAt": 1792763343360,
+  "syncedAt": 1792763475502,
   "notes": [
+    {
+      "id": "nmvl12vrtmidvqa",
+      "title": "",
+      "content": "同步过来时间线会乱掉",
+      "created": 1792763466329,
+      "updated": 1792763475419,
+      "pinned": false
+    },
     {
       "id": "nmvl0z35my70i7v",
       "title": "",
       "content": "我去有头像了，但是得加一个清除本地缓存的功能😡要不然之后发太多图片要爆炸了",
       "created": 1792763289274,
-      "updated": 1792763334135,
-      "pinned": false
+      "updated": 1792763466325,
+      "pinned": false,
+      "published": true
     },
     {
       "id": "nmvl0xy8piugr8c",
