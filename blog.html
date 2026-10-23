@@ -20,17 +20,17 @@
   [hidden]{display:none !important}
   body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7}
 
-  /* ---------- 顶栏 ---------- */
-  #topbar{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 18px}
-  #topbar .logo{font-size:17px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ---------- 顶栏（上下间距收窄） ---------- */
+  #topbar{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);height:38px;display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+  #topbar .logo{font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #topbar .logo em{color:var(--accent);font-style:normal}
-  #topbar .home{font-size:13px;color:var(--muted);cursor:pointer;flex:none;margin-left:12px}
+  #topbar .home{font-size:12px;color:var(--muted);cursor:pointer;flex:none;margin-left:12px}
   #topbar .home:hover{color:var(--accent)}
 
   .wrap{max-width:1020px;margin:0 auto;display:flex;gap:14px;align-items:flex-start;padding:14px 14px 60px}
 
-  /* ---------- 左侧资料卡 ---------- */
-  #profile{width:270px;flex:none;position:sticky;top:64px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 20px;text-align:center}
+  /* ---------- 左侧资料卡（PC 左右内距收窄） ---------- */
+  #profile{width:270px;flex:none;position:sticky;top:52px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 10px;text-align:center}
   #profile .avatar{width:76px;height:76px;border-radius:50%;margin:0 auto 10px;background:linear-gradient(135deg,#1d4ed8,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden}
   #profile .avatar img{width:100%;height:100%;object-fit:cover}
   #profile .name{font-size:17px;font-weight:700}
@@ -41,7 +41,7 @@
 
   /* ---------- 右侧信息流 ---------- */
   #feedCol{flex:1;min-width:0}
-  #searchWrap{position:sticky;top:50px;z-index:10;background:var(--bg);padding:2px 0 10px}
+  #searchWrap{position:sticky;top:38px;z-index:10;background:var(--bg);padding:2px 0 10px}
   #search{width:100%;padding:9px 14px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);outline:none;font-size:14px}
   #search:focus{border-color:var(--accent)}
   /* 高级搜索：折叠在搜索框下方 */
@@ -75,10 +75,10 @@
   .fi-content a{color:var(--accent)}
   .expand-btn{color:var(--accent);font-size:12.5px;cursor:pointer;margin-top:0;display:inline-block}
   .expand-btn:hover{text-decoration:underline}
-  .fi-actions{display:flex;margin-top:2px}
-  .fi-actions button{flex:1;background:none;border:none;color:var(--muted);font-size:12px;padding:5px 0;border-radius:8px}
+  /* 操作栏：只保留「详细」，偏左下，字号为原来的 70% */
+  .fi-actions{display:flex;justify-content:flex-start;margin-top:2px}
+  .fi-actions button{flex:none;background:none;border:none;color:var(--muted);font-size:8.4px;padding:5px 8px;border-radius:8px}
   .fi-actions button:hover{background:var(--accent-weak);color:var(--accent)}
-  .fi-actions button.liked{color:var(--accent);font-weight:600}
   /* 时间：单独一行，右下角 */
   .fi-foot{display:flex;justify-content:flex-end;padding:0 0 6px}
   .fi-time{color:var(--muted);font-size:11.5px;flex:none}
@@ -101,13 +101,14 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
   @media(max-width:860px){
-    .wrap{flex-direction:column;padding:10px 10px 50px}
-    #profile{position:static;width:100%;display:flex;align-items:center;gap:14px;text-align:left;padding:14px 16px}
-    #profile .avatar{width:54px;height:54px;margin:0;font-size:26px;flex:none}
+    .wrap{flex-direction:column;gap:8px;padding:8px 10px 50px}
+    /* 手机端个人页面：上下间距收窄 */
+    #profile{position:static;width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:8px 12px}
+    #profile .avatar{width:48px;height:48px;margin:0;font-size:23px;flex:none}
     #profile .pinfo{flex:1;min-width:0}
-    #profile .stats{border:none;margin:0;padding:0;flex:none;flex-direction:column;gap:6px}
+    #profile .stats{border:none;margin:0;padding:0;flex:none;flex-direction:column;gap:4px}
     #profile .stats b{font-size:14px}
-    #searchWrap{top:50px}
+    #searchWrap{top:38px}
   }
 </style>
 </head>
@@ -166,9 +167,8 @@
 'use strict';
 var $ = function(s){ return document.querySelector(s); };
 var DATA_URL = 'blog.json';
-var posts = [], liked = {}, lastScroll = 0, authorName = '我的博客', authorAvatar = '';
+var posts = [], lastScroll = 0, authorName = '我的博客', authorAvatar = '';
 var searchMode = 'text'; // 'text' | 'time'
-try{ liked = JSON.parse(localStorage.getItem('blog-liked') || '{}'); }catch(e){ liked = {}; }
 
 function pad(n){ return String(n).padStart(2, '0'); }
 /* 时间：今天只显示 HH:mm，昨天显示「昨天 HH:mm」，其余显示 M月D日 HH:mm（跨年带年份），24 小时制 */
@@ -218,7 +218,6 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
 }
-function saveLiked(){ try{ localStorage.setItem('blog-liked', JSON.stringify(liked)); }catch(e){} }
 
 function avatarHtml(cls){
   return authorAvatar
@@ -254,11 +253,7 @@ function renderFeed(){
           (n.pinned ? '<span class="pin-tag">置顶</span>' : '') + '</div>' +
         '<div class="fi-content' + (long ? ' clamped' : '') + '"></div>' +
         (long ? '<span class="expand-btn">全文</span>' : '') +
-        '<div class="fi-actions">' +
-          '<button class="act-like' + (liked[n.id] ? ' liked' : '') + '">' + (liked[n.id] ? '❤️ 已赞' : '🤍 赞') + '</button>' +
-          '<button class="act-share">🔗 分享</button>' +
-          '<button class="act-open">📄 查看</button>' +
-        '</div>' +
+        '<div class="fi-actions"><button class="act-open">📄 详细</button></div>' +
         '<div class="fi-foot"><span class="fi-time">' + fmtTime(n.updated) + '</span></div>' +
       '</div>';
     item.querySelector('.fi-name').textContent = authorName;
@@ -274,25 +269,6 @@ function renderFeed(){
         expandBtn.textContent = open ? '收起' : '全文';
       });
     }
-    // 赞（只存在访客自己浏览器里）
-    item.querySelector('.act-like').addEventListener('click', function(e){
-      e.stopPropagation();
-      liked[n.id] = !liked[n.id];
-      if(!liked[n.id]) delete liked[n.id];
-      saveLiked();
-      this.classList.toggle('liked', !!liked[n.id]);
-      this.textContent = liked[n.id] ? '❤️ 已赞' : '🤍 赞';
-    });
-    // 复制链接
-    item.querySelector('.act-share').addEventListener('click', function(e){
-      e.stopPropagation();
-      var url = location.origin + location.pathname + '#p-' + n.id;
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(url).then(function(){ toast('链接已复制 ✓'); }, function(){ prompt('复制链接：', url); });
-      }else{
-        prompt('复制链接：', url);
-      }
-    });
     // 打开单篇
     item.querySelector('.act-open').addEventListener('click', function(e){
       e.stopPropagation();
@@ -395,5 +371,6 @@ fetch(DATA_URL + '?t=' + Date.now())
   });
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4655f3c58dd6497fb7ddb85b68480db7","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
