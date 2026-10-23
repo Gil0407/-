@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>我的博客</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📝%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#f2f3f5; --panel:#ffffff; --text:#1f2329; --muted:#8a919f;
+    --border:#e6e8eb; --accent:#ff8200; --accent-weak:#fff3e6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#131418; --panel:#1d1f24; --text:#e8eaf0; --muted:#7d8494;
+      --border:#2b2e36; --accent:#ff9a3d; --accent-weak:#38281a;
+    }
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7}
+
+  /* ---------- 顶栏 ---------- */
+  #topbar{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 18px}
+  #topbar .logo{font-size:17px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #topbar .logo em{color:var(--accent);font-style:normal}
+  #topbar .home{font-size:13px;color:var(--muted);cursor:pointer;flex:none;margin-left:12px}
+  #topbar .home:hover{color:var(--accent)}
+
+  .wrap{max-width:1020px;margin:0 auto;display:flex;gap:14px;align-items:flex-start;padding:14px 14px 60px}
+
+  /* ---------- 左侧资料卡 ---------- */
+  #profile{width:270px;flex:none;position:sticky;top:64px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 20px;text-align:center}
+  #profile .avatar{width:76px;height:76px;border-radius:50%;margin:0 auto 10px;background:linear-gradient(135deg,#ff8200,#ff5f6d);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden}
+  #profile .avatar img{width:100%;height:100%;object-fit:cover}
+  #profile .name{font-size:17px;font-weight:700}
+  #profile .bio{font-size:13px;color:var(--muted);margin-top:4px;word-wrap:break-word}
+  #profile .stats{display:flex;justify-content:center;gap:28px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+  #profile .stats b{font-size:16px;display:block}
+  #profile .stats span{font-size:12px;color:var(--muted)}
+
+  /* ---------- 右侧信息流 ---------- */
+  #feedCol{flex:1;min-width:0}
+  #searchWrap{position:sticky;top:50px;z-index:10;background:var(--bg);padding:2px 0 10px}
+  #search{width:100%;padding:9px 14px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);outline:none;font-size:14px}
+  #search:focus{border-color:var(--accent)}
+
+  #feed{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .fi{display:flex;gap:10px;padding:14px 16px 8px;border-bottom:1px solid var(--border);cursor:pointer}
+  .fi:last-child{border-bottom:none}
+  .fi-avatar{width:40px;height:40px;border-radius:50%;flex:none;background:linear-gradient(135deg,#ff8200,#ff5f6d);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}
+  .fi-avatar img{width:100%;height:100%;object-fit:cover}
+  .fi-body{flex:1;min-width:0}
+  .fi-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .fi-name{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fi-time{color:var(--muted);font-size:12px;flex:none;margin-left:auto}
+  .pin-tag{color:var(--accent);font-size:11px;border:1px solid var(--accent);border-radius:4px;padding:0 5px;flex:none}
+  .fi-content{font-size:15px;line-height:1.75;margin-top:2px;word-wrap:break-word;overflow-wrap:break-word}
+  .fi-content.clamped{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+  .fi-content img{max-width:100%;height:auto;border-radius:8px;margin:6px 0;display:block}
+  .fi-content blockquote{margin:.5em 0;padding:.05em .9em;border-left:3px solid var(--accent);color:var(--muted);background:var(--accent-weak);border-radius:0 8px 8px 0}
+  .fi-content h2{font-size:1.2em;margin:.7em 0 .25em}
+  .fi-content hr{border:none;border-top:1px solid var(--border);margin:1em 0}
+  .fi-content ul,.fi-content ol{padding-left:1.4em}
+  .fi-content a{color:var(--accent)}
+  .expand-btn{color:var(--accent);font-size:13px;cursor:pointer;margin-top:2px;display:inline-block}
+  .expand-btn:hover{text-decoration:underline}
+  .fi-actions{display:flex;margin-top:6px}
+  .fi-actions button{flex:1;background:none;border:none;color:var(--muted);font-size:12.5px;padding:7px 0;border-radius:8px}
+  .fi-actions button:hover{background:var(--accent-weak);color:var(--accent)}
+  .fi-actions button.liked{color:var(--accent);font-weight:600}
+
+  /* ---------- 单篇阅读页 ---------- */
+  .back{display:inline-block;margin-bottom:12px;color:var(--accent);cursor:pointer;font-size:13.5px;text-decoration:none}
+  article{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:26px 28px}
+  article h1.art{font-size:24px;margin:0 0 4px;line-height:1.4}
+  .art-meta{color:var(--muted);font-size:13px;margin-bottom:18px}
+  #content{font-size:16px;line-height:1.85;word-wrap:break-word;overflow-wrap:break-word}
+  #content img{max-width:100%;height:auto;border-radius:10px;margin:8px 0;display:block}
+  #content blockquote{margin:.6em 0;padding:.1em 1em;border-left:4px solid var(--accent);background:var(--accent-weak);border-radius:0 8px 8px 0}
+  #content h2{font-size:1.3em;margin:.8em 0 .3em}
+  #content hr{border:none;border-top:1px solid var(--border);margin:1.2em 0}
+  #content a{color:var(--accent)}
+
+  #empty{text-align:center;color:var(--muted);padding:60px 0;background:var(--panel);border:1px solid var(--border);border-radius:14px}
+
+  #toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:rgba(30,32,38,.92);color:#fff;padding:9px 18px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:all .25s;z-index:99}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media(max-width:860px){
+    .wrap{flex-direction:column;padding:10px 10px 50px}
+    #profile{position:static;width:100%;display:flex;align-items:center;gap:14px;text-align:left;padding:14px 16px}
+    #profile .avatar{width:54px;height:54px;margin:0;font-size:26px;flex:none}
+    #profile .pinfo{flex:1;min-width:0}
+    #profile .stats{border:none;margin:0;padding:0;flex:none;flex-direction:column;gap:6px}
+    #profile .stats b{font-size:14px}
+    #searchWrap{top:50px}
+  }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span class="logo" id="homeBtn">📝 <em id="siteName">我的博客</em></span>
+  <span class="home" id="homeBtn2">⌂ 首页</span>
+</div>
+
+<div class="wrap">
+  <aside id="profile">
+    <div class="avatar" id="pAvatar">📝</div>
+    <div class="pinfo">
+      <div class="name" id="pName">…</div>
+      <div class="bio" id="pBio"></div>
+    </div>
+    <div class="stats">
+      <div><b id="stPosts">0</b><span>文章</span></div>
+      <div><b id="stWords">0</b><span>字数</span></div>
+    </div>
+  </aside>
+
+  <div id="feedCol">
+    <div id="feedView">
+      <div id="searchWrap">
+        <input id="search" type="text" placeholder="搜索微博…" hidden />
+      </div>
+      <div id="feed"></div>
+      <div id="empty" hidden>还没有发布任何内容 📭</div>
+    </div>
+
+    <div id="readView" hidden>
+      <a class="back" id="backBtn">← 返回</a>
+      <article>
+        <h1 class="art" id="artTitle"></h1>
+        <div class="art-meta" id="artMeta"></div>
+        <div id="content"></div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(s){ return document.querySelector(s); };
+var DATA_URL = 'blog.json';
+var posts = [], liked = {}, lastScroll = 0, authorName = '我的博客', authorAvatar = '';
+try{ liked = JSON.parse(localStorage.getItem('blog-liked') || '{}'); }catch(e){ liked = {}; }
+
+function pad(n){ return String(n).padStart(2, '0'); }
+/* 微博式相对时间 */
+function fmtTime(ts){
+  var d = new Date(ts || 0), now = new Date();
+  var diff = Date.now() - (ts || 0);
+  if(diff < 60000) return '刚刚';
+  if(diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+  if(d.toDateString() === now.toDateString()) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年';
+  return y + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+var stripDiv = document.createElement('div');
+function stripHtml(html){ stripDiv.innerHTML = html || ''; return stripDiv.textContent || ''; }
+function wordCount(html){ var t = stripHtml(html).trim(); return t ? t.replace(/\s+/g, '').length : 0; }
+
+/* 防注入过滤（内容是你自己的，双保险） */
+function sanitize(html){
+  var d = document.createElement('div');
+  d.innerHTML = html || '';
+  d.querySelectorAll('script,iframe,object,embed').forEach(function(el){ el.remove(); });
+  var walker = document.createTreeWalker(d, NodeFilter.SHOW_ELEMENT);
+  var el;
+  while((el = walker.nextNode())){
+    Array.prototype.slice.call(el.attributes).forEach(function(a){
+      if(/^on/i.test(a.name)) el.removeAttribute(a.name);
+      if(/^(href|src)$/i.test(a.name) && /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+    });
+  }
+  return d.innerHTML;
+}
+
+var toastTimer = null;
+function toast(msg){
+  var t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+function saveLiked(){ try{ localStorage.setItem('blog-liked', JSON.stringify(liked)); }catch(e){} }
+
+function avatarHtml(cls){
+  return authorAvatar
+    ? '<div class="' + cls + '"><img src="' + authorAvatar + '" alt=""></div>'
+    : '<div class="' + cls + '">📝</div>';
+}
+
+function renderFeed(q){
+  var box = $('#feed');
+  box.innerHTML = '';
+  q = (q || '').trim().toLowerCase();
+  var list = posts.filter(function(n){
+    if(!q) return true;
+    return ((n.title || '') + ' ' + stripHtml(n.content)).toLowerCase().indexOf(q) !== -1;
+  });
+  if(!list.length){
+    $('#feed').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:13.5px">' + (q ? '没有匹配的内容' : '还没有内容') + '</div>';
+    return;
+  }
+  list.forEach(function(n){
+    var long = stripHtml(n.content).trim().length > 160;
+    var item = document.createElement('div');
+    item.className = 'fi';
+    item.innerHTML =
+      avatarHtml('fi-avatar') +
+      '<div class="fi-body">' +
+        '<div class="fi-head"><span class="fi-name"></span>' +
+          (n.pinned ? '<span class="pin-tag">置顶</span>' : '') +
+          '<span class="fi-time">' + fmtTime(n.updated) + '</span></div>' +
+        '<div class="fi-content' + (long ? ' clamped' : '') + '"></div>' +
+        (long ? '<span class="expand-btn">全文</span>' : '') +
+        '<div class="fi-actions">' +
+          '<button class="act-like' + (liked[n.id] ? ' liked' : '') + '">' + (liked[n.id] ? '❤️ 已赞' : '🤍 赞') + '</button>' +
+          '<button class="act-share">🔗 分享</button>' +
+          '<button class="act-open">📄 查看</button>' +
+        '</div>' +
+      '</div>';
+    item.querySelector('.fi-name').textContent = authorName;
+    item.querySelector('.fi-content').innerHTML = sanitize(n.content);
+
+    // 全文 / 收起
+    var expandBtn = item.querySelector('.expand-btn');
+    if(expandBtn){
+      expandBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var c = item.querySelector('.fi-content');
+        var open = c.classList.toggle('clamped') === false;
+        expandBtn.textContent = open ? '收起' : '全文';
+      });
+    }
+    // 赞（只存在访客自己浏览器里）
+    item.querySelector('.act-like').addEventListener('click', function(e){
+      e.stopPropagation();
+      liked[n.id] = !liked[n.id];
+      if(!liked[n.id]) delete liked[n.id];
+      saveLiked();
+      this.classList.toggle('liked', !!liked[n.id]);
+      this.textContent = liked[n.id] ? '❤️ 已赞' : '🤍 赞';
+    });
+    // 复制链接
+    item.querySelector('.act-share').addEventListener('click', function(e){
+      e.stopPropagation();
+      var url = location.origin + location.pathname + '#p-' + n.id;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(function(){ toast('链接已复制 ✓'); }, function(){ prompt('复制链接：', url); });
+      }else{
+        prompt('复制链接：', url);
+      }
+    });
+    // 打开单篇
+    item.querySelector('.act-open').addEventListener('click', function(e){
+      e.stopPropagation();
+      openPost(n.id);
+    });
+    // 点卡片其它区域也进单篇（链接除外）
+    item.addEventListener('click', function(e){
+      if(e.target.closest('a,button,.expand-btn')) return;
+      openPost(n.id);
+    });
+    box.appendChild(item);
+  });
+}
+
+function openPost(id, push){
+  var n = posts.find(function(x){ return x.id === id; });
+  if(!n) return;
+  if(push !== false) location.hash = 'p-' + id;
+  lastScroll = window.scrollY;
+  $('#feedView').hidden = true;
+  $('#readView').hidden = false;
+  $('#artTitle').textContent = n.title || '无标题';
+  $('#artMeta').textContent = authorName + ' · ' + fmtTime(n.updated) + ' · ' + wordCount(n.content) + ' 字';
+  $('#content').innerHTML = sanitize(n.content);
+  window.scrollTo(0, 0);
+}
+function showList(){
+  if(location.hash) history.replaceState(null, '', location.pathname);
+  $('#readView').hidden = true;
+  $('#feedView').hidden = false;
+  window.scrollTo(0, lastScroll);
+}
+function route(){
+  var m = location.hash.match(/^#p-(.+)$/);
+  if(m && posts.some(function(x){ return x.id === m[1]; })) openPost(m[1], false);
+  else showList();
+}
+
+function fillProfile(data){
+  authorName = data.author || '我的博客';
+  authorAvatar = data.avatar || '';
+  document.title = authorName + ' 的博客';
+  $('#siteName').textContent = authorName;
+  $('#pName').textContent = authorName;
+  $('#pBio').textContent = data.bio || '';
+  if(authorAvatar){
+    var pa = $('#pAvatar');
+    pa.innerHTML = '<img src="' + authorAvatar + '" alt="">';
+  }
+  var totalWords = posts.reduce(function(s, n){ return s + wordCount(n.content); }, 0);
+  $('#stPosts').textContent = posts.length;
+  $('#stWords').textContent = totalWords > 10000 ? (totalWords / 10000).toFixed(1) + 'w' : totalWords;
+}
+
+$('#backBtn').addEventListener('click', showList);
+$('#homeBtn').addEventListener('click', showList);
+$('#homeBtn2').addEventListener('click', showList);
+$('#search').addEventListener('input', function(){ renderFeed(this.value); });
+window.addEventListener('hashchange', route);
+
+fetch(DATA_URL + '?t=' + Date.now())
+  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(function(data){
+    posts = (data.notes || []).slice().sort(function(a, b){
+      return ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || ((b.updated || 0) - (a.updated || 0));
+    });
+    fillProfile(data);
+    if(!posts.length){ $('#empty').hidden = false; $('#feed').hidden = true; return; }
+    $('#search').hidden = false;
+    renderFeed('');
+    route();
+  })
+  .catch(function(){
+    var e = $('#empty');
+    e.hidden = false;
+    e.textContent = '加载失败（可能还没发布过，或 Pages 尚未生效）';
+    $('#feed').hidden = true;
+  });
+})();
+</script>
+</body>
+</html>
