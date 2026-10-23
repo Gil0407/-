@@ -29,7 +29,6 @@
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
   ::-webkit-scrollbar-track{background:transparent}
 
-  /* ---------- 侧栏 ---------- */
   #sidebar{width:300px;min-width:300px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:transform .25s;}
   #sidebar header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;}
   #sidebar h1{font-size:19px;margin:0}
@@ -62,7 +61,6 @@
   .backup-row button:hover{color:var(--text);border-color:var(--accent)}
   #storageInfo{font-size:11.5px;color:var(--muted)}
 
-  /* ---------- 博客设置 ---------- */
   #blogSettings{border:1px solid var(--border);border-radius:10px;overflow:hidden}
   #blogSettings .bs-head{padding:6px 10px;font-size:12.5px;color:var(--muted);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
   #blogSettings .bs-head:hover{background:var(--hover)}
@@ -71,7 +69,6 @@
   #blogSettings input{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);outline:none;font-size:13px}
   #blogSettings input:focus{border-color:var(--accent)}
 
-  /* ---------- 主区 ---------- */
   #main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
   #emptyState{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted)}
   #emptyState .big{font-size:54px}
@@ -96,7 +93,6 @@
   #statusBar{display:flex;justify-content:space-between;padding:8px 32px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);background:var(--panel)}
   #statusBar span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-  /* ---------- 其它 ---------- */
   #toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:rgba(30,32,38,.92);color:#fff;padding:9px 18px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:all .25s;z-index:99}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   #menuBtn{display:none;position:fixed;top:12px;left:12px;z-index:30;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:16px;box-shadow:var(--shadow)}
@@ -202,7 +198,6 @@ function fmtTime(ts){
   var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '-';
   return y + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + hm;
 }
-/* 绝对时间：写入 json 用，24 小时制 */
 function absTime(ts){
   var d = new Date(ts || Date.now()), now = new Date();
   var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
@@ -212,7 +207,6 @@ function absTime(ts){
 var stripDiv = document.createElement('div');
 function stripHtml(html){ stripDiv.innerHTML = html; return stripDiv.textContent || ''; }
 
-/* ================= 博客设置（标题 / ID / 头像） ================= */
 function getSiteName(){ return localStorage.getItem('notepad-site-name') || ''; }
 function getAuthorId(){ return localStorage.getItem('notepad-author-id') || ''; }
 function getAvatar(){ return localStorage.getItem('notepad-avatar') || ''; }
@@ -261,7 +255,6 @@ $('#avatarInput').addEventListener('change', function(){
   fr.readAsDataURL(f);
 });
 
-/* ================= 存储 ================= */
 function req2p(r){ return new Promise(function(res, rej){ r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; }); }
 function initStore(){
   return new Promise(function(resolve){
@@ -311,7 +304,6 @@ function initStore(){
   });
 }
 
-/* ================= 笔记操作 ================= */
 function sortNotes(){
   notes.sort(function(a, b){
     return ((b.pinned?1:0) - (a.pinned?1:0)) || ((b.updated||0) - (a.updated||0));
@@ -454,7 +446,6 @@ function updateWordCount(){
   $('#wordCount').textContent = count + ' 字';
 }
 
-/* ================= 图片 ================= */
 function processImage(file){
   return new Promise(function(resolve){
     if(!file || !/^image\//.test(file.type)){ resolve(null); return; }
@@ -553,7 +544,6 @@ $('#imageInput').addEventListener('change', function(){
   this.value = '';
 });
 
-/* ================= 工具栏 ================= */
 function currentBlock(){
   var sel = getSelection();
   if(!sel.rangeCount) return null;
@@ -598,7 +588,6 @@ document.addEventListener('selectionchange', function(){
   });
 });
 
-/* ================= 备份导入导出 ================= */
 $('#exportBtn').addEventListener('click', function(){
   saveNow();
   var data = { app: 'notepad', version: 1, exportedAt: new Date().toISOString(), notes: notes };
@@ -645,7 +634,7 @@ $('#importFile').addEventListener('change', function(){
   fr.readAsText(f, 'utf-8');
 });
 
-/* ================= GitHub 发布 ================= */
+/* ================= GitHub 发布（只追加/更新，不丢远程旧内容） ================= */
 var GH_REPO = 'Gil0407/notepad';
 var GH_BRANCH = 'main';
 var GH_BLOG_FILE = 'blog.json';
@@ -664,11 +653,12 @@ function getToken(){
   return localStorage.getItem('notepad-gh-token');
 }
 
+/* 读取远程文件；404 返回 {data:null, sha:null}；其它失败抛出 */
 function ghGetFile(file, token){
   return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
     .then(function(r){
       if(r.status === 404) return { data: null, sha: null };
-      if(!r.ok) throw new Error('HTTP ' + r.status);
+      if(!r.ok) throw new Error('读取远程失败 HTTP ' + r.status);
       return r.json().then(function(j){
         var data = null;
         try{ data = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))))); }catch(e){}
@@ -676,6 +666,7 @@ function ghGetFile(file, token){
       });
     });
 }
+/* 写远程；409/422 表示 sha 过期，抛特殊标记 */
 function ghPutFile(file, obj, sha, token, message){
   var body = {
     message: message,
@@ -686,11 +677,15 @@ function ghPutFile(file, obj, sha, token, message){
   return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + file, {
     method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
   }).then(function(r){
-    if(!r.ok) throw new Error('HTTP ' + r.status);
+    if(r.status === 409 || r.status === 422){
+      var e = new Error('sha-conflict'); e.conflict = true; throw e;
+    }
+    if(!r.ok) throw new Error('写入远程失败 HTTP ' + r.status);
+    return r.json();
   });
 }
 
-/* 合并远程与本地：远程已有笔记原样保留，同 id 用 updated 较新的版本覆盖 */
+/* 合并：远程全部保留，本地按 id 覆盖或追加；同 id 取 updated 较新 */
 function mergeRemoteWithLocal(remoteNotes, localNotes){
   var byId = {};
   var order = [];
@@ -708,31 +703,43 @@ function mergeRemoteWithLocal(remoteNotes, localNotes){
   return order.map(function(id){ return byId[id]; });
 }
 
+/* 发布：先读远程（失败即中止），合并后写回；sha 冲突则重读重合并再写一次 */
 function publishToBlog(){
   if(!notes.length){ toast('记事本是空的'); return; }
-  if(!confirm('将把 ' + notes.length + ' 条笔记发布到博客，并清空本地记事本。\n（远程已有的内容不会被覆盖，只会合并；要删除已发布的内容请打开 admin.html）')) return;
+  if(!confirm('将把 ' + notes.length + ' 条笔记发布到博客，并清空本地记事本。\n远程已有内容会全部保留（同 id 用较新版本），不会被覆盖。')) return;
   var token = getToken();
   if(!token) return;
   toast('正在发布…');
-  ghGetFile(GH_BLOG_FILE, token).then(function(remote){
-    var remoteNotes = (remote.data && Array.isArray(remote.data.notes)) ? remote.data.notes : [];
-    var localPub = notes.map(function(n){
-      var c = normalizeNote(n);
-      c.published = true;
-      c.time = absTime(c.updated);
-      return c;
+
+  var localPub = notes.map(function(n){
+    var c = normalizeNote(n);
+    c.published = true;
+    c.time = absTime(c.updated);
+    return c;
+  });
+
+  function attempt(timesLeft){
+    return ghGetFile(GH_BLOG_FILE, token).then(function(remote){
+      /* 关键：读远程失败绝不能继续（否则会用空 remote 覆盖） */
+      var remoteNotes = (remote.data && Array.isArray(remote.data.notes)) ? remote.data.notes : [];
+      var merged = mergeRemoteWithLocal(remoteNotes, localPub);
+      var payload = {
+        app: 'notepad-blog', version: 1,
+        author: getAuthorId() || (remote.data && remote.data.author) || GH_REPO.split('/')[0],
+        siteName: getSiteName() || (remote.data && remote.data.siteName) || '',
+        avatar: getAvatar() || (remote.data && remote.data.avatar) || '',
+        publishedAt: Date.now(),
+        notes: merged
+      };
+      return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString())
+        .catch(function(e){
+          if(e.conflict && timesLeft > 0) return attempt(timesLeft - 1);
+          throw e;
+        });
     });
-    var merged = mergeRemoteWithLocal(remoteNotes, localPub);
-    var payload = {
-      app: 'notepad-blog', version: 1,
-      author: getAuthorId() || (remote.data && remote.data.author) || GH_REPO.split('/')[0],
-      siteName: getSiteName() || (remote.data && remote.data.siteName) || '',
-      avatar: getAvatar() || (remote.data && remote.data.avatar) || '',
-      publishedAt: Date.now(),
-      notes: merged
-    };
-    return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString());
-  }).then(function(){
+  }
+
+  attempt(2).then(function(){
     var count = notes.length;
     notes = [];
     currentId = null;
@@ -746,12 +753,11 @@ function publishToBlog(){
       toast('已发布 ' + count + ' 篇 ✓ 本地已清空，约1分钟后博客可见');
     });
   }).catch(function(e){
-    toast('发布失败：' + e.message + '（检查 Token 权限）');
+    toast('发布失败：' + e.message + '（未改动本地笔记，可重试）');
   });
 }
 $('#publishBtn').addEventListener('click', publishToBlog);
 
-/* ================= 其它交互 ================= */
 var toastTimer = null;
 function toast(msg){
   var t = $('#toast');
@@ -820,7 +826,6 @@ document.addEventListener('visibilitychange', function(){
   if(document.hidden) saveNow();
 });
 
-/* ================= 启动 ================= */
 function makeWelcomeNote(){
   var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='560' height='150'>" +
     "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
