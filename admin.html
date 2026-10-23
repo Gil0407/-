@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>博客后台管理</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⚙️%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#eef1f7; --panel:#ffffff; --text:#1f2329; --muted:#8a919f;
+    --border:#e2e6ef; --accent:#1d4ed8; --accent-weak:#e9effc;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1626; --panel:#17203a; --text:#e6ebf5; --muted:#8b96ad;
+      --border:#273252; --accent:#6ea8ff; --accent-weak:#1d2c4e;
+    }
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7}
+  #topbar{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--border);height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 18px}
+  #topbar .logo{font-size:17px;font-weight:700}
+  #topbar .logo em{color:var(--accent);font-style:normal}
+  #topbar a{color:var(--muted);font-size:13px;text-decoration:none;margin-left:12px}
+  #topbar a:hover{color:var(--accent)}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 14px 60px}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .bar .count{font-size:13px;color:var(--muted)}
+  .bar button{margin-left:auto;padding:8px 16px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:9px;font-size:13.5px}
+  .bar button:hover{border-color:var(--accent);color:var(--accent)}
+  .item{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+  .item-head{display:flex;align-items:center;gap:8px;min-width:0}
+  .item-title{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pin-tag{color:var(--accent);font-size:10.5px;border:1px solid var(--accent);border-radius:4px;padding:0 4px;flex:none}
+  .item-time{margin-left:auto;font-size:11.5px;color:var(--muted);flex:none}
+  .item-snippet{font-size:13px;color:var(--muted);margin-top:4px;word-wrap:break-word;overflow-wrap:break-word}
+  .item img{width:60%;height:auto;border-radius:8px;margin:6px 0;display:block}
+  .item blockquote{margin:.4em 0;padding:.05em .9em;border-left:3px solid var(--accent);color:var(--muted);background:var(--accent-weak);border-radius:0 8px 8px 0}
+  .item-acts{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+  .item-acts button{flex:1;padding:6px 0;border:1px solid var(--border);background:none;border-radius:8px;color:var(--muted);font-size:12.5px}
+  .item-acts button:hover{border-color:var(--accent);color:var(--accent)}
+  .item-acts button.danger:hover{border-color:#d83838;color:#d83838}
+  #empty{text-align:center;color:var(--muted);padding:60px 0;background:var(--panel);border:1px solid var(--border);border-radius:14px}
+  #hint{font-size:12.5px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.8}
+  #toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:rgba(16,24,48,.92);color:#fff;padding:9px 18px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:all .25s;z-index:99}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span class="logo">⚙️ <em>博客后台管理</em></span>
+  <span><a href="blog.html" target="_blank">查看博客 ↗</a><a href="index.html" target="_blank">写笔记 ↗</a></span>
+</div>
+
+<div class="wrap">
+  <div class="bar">
+    <span class="count" id="count"></span>
+    <button id="reloadBtn">⟳ 刷新</button>
+  </div>
+  <div id="list"></div>
+  <div id="empty" hidden>还没有已发布的内容 📭</div>
+  <div id="hint">
+    删除 / 置顶会立即写回仓库的 blog.json，约 1 分钟后博客页生效。<br />
+    此页面仅自己使用，请勿把地址公开；首次操作需要输入 GitHub Token。
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(s){ return document.querySelector(s); };
+var GH_REPO = 'Gil0407/notepad';   // ← 与 index.html 保持一致
+var GH_BRANCH = 'main';
+var GH_FILE = 'blog.json';
+var RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/' + GH_FILE;
+
+var data = null; // { author, siteName, avatar, notes:[...] }
+
+function pad(n){ return String(n).padStart(2, '0'); }
+function fmtTime(ts){
+  var d = new Date(ts || 0), now = new Date();
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  var that0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  var diff = Math.round((today0 - that0) / 86400000);
+  if(diff === 0) return hm;
+  if(diff === 1) return '昨天 ' + hm;
+  var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年';
+  return y + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+}
+var stripDiv = document.createElement('div');
+function stripHtml(html){ stripDiv.innerHTML = html || ''; return stripDiv.textContent || ''; }
+function sanitize(html){
+  var d = document.createElement('div');
+  d.innerHTML = html || '';
+  d.querySelectorAll('script,iframe,object,embed').forEach(function(el){ el.remove(); });
+  return d.innerHTML;
+}
+var toastTimer = null;
+function toast(msg){
+  var t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+function ghHeaders(token){
+  return { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
+}
+function getToken(){
+  var t = localStorage.getItem('notepad-gh-token');
+  if(!t){
+    t = prompt('需要 GitHub Token（fine-grained，仅授权本仓库 contents 读写）：');
+    if(!t) return null;
+    t = t.trim();
+    localStorage.setItem('notepad-gh-token', t);
+  }
+  return localStorage.getItem('notepad-gh-token');
+}
+
+function loadData(){
+  // 优先从 Pages 读（快），失败则从 raw.githubusercontent 读
+  return fetch(GH_FILE + '?t=' + Date.now())
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .catch(function(){ return fetch(RAW_URL + '?t=' + Date.now()).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }); });
+}
+
+function render(){
+  var list = $('#list');
+  list.innerHTML = '';
+  var notes = (data && data.notes) || [];
+  $('#count').textContent = '已发布 ' + notes.length + ' 条';
+  if(!notes.length){ $('#empty').hidden = false; return; }
+  $('#empty').hidden = true;
+  notes.forEach(function(n){
+    var el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML =
+      '<div class="item-head"><span class="item-title"></span>' +
+        (n.pinned ? '<span class="pin-tag">置顶</span>' : '') +
+        '<span class="item-time">' + fmtTime(n.updated) + '</span></div>' +
+      '<div class="item-snippet">' + esc(stripHtml(n.content).trim().slice(0, 100) || '（无文字内容）') + '</div>' +
+      '<div class="item-acts">' +
+        '<button data-act="pin">' + (n.pinned ? '取消置顶' : '📌 置顶') + '</button>' +
+        '<button data-act="del" class="danger">🗑️ 删除</button>' +
+      '</div>';
+    el.querySelector('.item-title').textContent = n.title || '无标题';
+    var full = document.createElement('div');
+    full.innerHTML = sanitize(n.content);
+    var imgs = full.querySelectorAll('img');
+    // 缩略展示前两张图
+    for(var i = 0; i < Math.min(imgs.length, 2); i++){
+      el.insertBefore(imgs[i].cloneNode(), el.querySelector('.item-acts'));
+    }
+    el.querySelector('[data-act="pin"]').addEventListener('click', function(){ togglePin(n.id); });
+    el.querySelector('[data-act="del"]').addEventListener('click', function(){ delNote(n.id, n.title); });
+    list.appendChild(el);
+  });
+}
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+/* 写回 blog.json（先取 sha 再 PUT） */
+function saveData(){
+  var token = getToken();
+  if(!token) return Promise.reject(new Error('没有 Token'));
+  return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE + '?ref=' + GH_BRANCH, { headers: ghHeaders(token) })
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(j){
+      var body = {
+        message: 'admin update ' + new Date().toISOString(),
+        content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+        branch: GH_BRANCH,
+        sha: j.sha
+      };
+      return fetch('https://api.github.com/repos/' + GH_REPO + '/contents/' + GH_FILE, {
+        method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body)
+      });
+    })
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+    });
+}
+
+function togglePin(id){
+  var n = (data.notes || []).find(function(x){ return x.id === id; });
+  if(!n) return;
+  n.pinned = !n.pinned;
+  toast('写入中…');
+  saveData().then(function(){
+    render();
+    toast(n.pinned ? '已置顶 📌' : '已取消置顶');
+  }).catch(function(e){ toast('失败：' + e.message); load(); });
+}
+
+function delNote(id, title){
+  if(!confirm('确定从博客删除「' + (title || '无标题') + '」吗？删除后无法恢复。')) return;
+  data.notes = (data.notes || []).filter(function(x){ return x.id !== id; });
+  toast('写入中…');
+  saveData().then(function(){
+    render();
+    toast('已删除 ✓ 约1分钟后博客生效');
+  }).catch(function(e){ toast('失败：' + e.message); load(); });
+}
+
+function load(){
+  loadData().then(function(d){
+    data = d || { notes: [] };
+    data.notes = (data.notes || []).slice().sort(function(a, b){
+      return ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || ((b.updated || 0) - (a.updated || 0));
+    });
+    render();
+  }).catch(function(){
+    $('#empty').hidden = false;
+    $('#empty').textContent = '加载失败（blog.json 不存在，或网络问题）';
+  });
+}
+$('#reloadBtn').addEventListener('click', function(){ load(); toast('已刷新'); });
+load();
+})();
+</script>
+</body>
+</html>

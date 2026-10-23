@@ -44,6 +44,17 @@
   #searchWrap{position:sticky;top:50px;z-index:10;background:var(--bg);padding:2px 0 10px}
   #search{width:100%;padding:9px 14px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);outline:none;font-size:14px}
   #search:focus{border-color:var(--accent)}
+  /* 高级搜索：折叠在搜索框下方 */
+  #advToggle{margin-top:6px;text-align:right}
+  #advToggle button{background:none;border:none;color:var(--muted);font-size:12.5px;padding:2px 6px;border-radius:6px}
+  #advToggle button:hover{color:var(--accent)}
+  #advPanel{margin-top:4px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+  .adv-tabs{display:flex;gap:6px;margin-bottom:8px}
+  .adv-tabs button{flex:1;padding:6px 0;border:1px solid var(--border);background:none;border-radius:8px;color:var(--muted);font-size:13px}
+  .adv-tabs button.on{background:var(--accent-weak);border-color:var(--accent);color:var(--accent);font-weight:600}
+  #dateSearch{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;font-size:14px;color-scheme:light dark}
+  #dateSearch:focus{border-color:var(--accent)}
+  .adv-hint{font-size:12px;color:var(--muted);text-align:center;padding:6px 0 2px}
 
   #feed{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden}
   .fi{display:flex;gap:8px;padding:10px 12px 4px;border-bottom:1px solid var(--border);cursor:pointer}
@@ -53,11 +64,10 @@
   .fi-body{flex:1;min-width:0}
   .fi-head{display:flex;align-items:baseline;gap:6px;min-width:0}
   .fi-name{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .fi-time{color:var(--muted);font-size:11.5px;flex:none;margin-left:auto}
   .pin-tag{color:var(--accent);font-size:10.5px;border:1px solid var(--accent);border-radius:4px;padding:0 4px;flex:none}
   .fi-content{font-size:14px;line-height:1.65;margin-top:1px;word-wrap:break-word;overflow-wrap:break-word}
   .fi-content.clamped{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-  .fi-content img{max-width:100%;height:auto;border-radius:8px;margin:4px 0;display:block}
+  .fi-content img{width:60%;height:auto;border-radius:8px;margin:4px 0;display:block}
   .fi-content blockquote{margin:.4em 0;padding:.05em .9em;border-left:3px solid var(--accent);color:var(--muted);background:var(--accent-weak);border-radius:0 8px 8px 0}
   .fi-content h2{font-size:1.15em;margin:.6em 0 .2em}
   .fi-content hr{border:none;border-top:1px solid var(--border);margin:.8em 0}
@@ -69,6 +79,9 @@
   .fi-actions button{flex:1;background:none;border:none;color:var(--muted);font-size:12px;padding:5px 0;border-radius:8px}
   .fi-actions button:hover{background:var(--accent-weak);color:var(--accent)}
   .fi-actions button.liked{color:var(--accent);font-weight:600}
+  /* 时间：单独一行，右下角 */
+  .fi-foot{display:flex;justify-content:flex-end;padding:0 0 6px}
+  .fi-time{color:var(--muted);font-size:11.5px;flex:none}
 
   /* ---------- 单篇阅读页 ---------- */
   .back{display:inline-block;margin-bottom:12px;color:var(--accent);cursor:pointer;font-size:13.5px;text-decoration:none}
@@ -76,7 +89,7 @@
   article h1.art{font-size:24px;margin:0 0 4px;line-height:1.4}
   .art-meta{color:var(--muted);font-size:13px;margin-bottom:18px}
   #content{font-size:16px;line-height:1.85;word-wrap:break-word;overflow-wrap:break-word}
-  #content img{max-width:100%;height:auto;border-radius:10px;margin:8px 0;display:block}
+  #content img{width:60%;height:auto;border-radius:10px;margin:8px 0;display:block}
   #content blockquote{margin:.6em 0;padding:.1em 1em;border-left:4px solid var(--accent);background:var(--accent-weak);border-radius:0 8px 8px 0}
   #content h2{font-size:1.3em;margin:.8em 0 .3em}
   #content hr{border:none;border-top:1px solid var(--border);margin:1.2em 0}
@@ -120,7 +133,16 @@
   <div id="feedCol">
     <div id="feedView">
       <div id="searchWrap">
-        <input id="search" type="text" placeholder="搜索微博…" hidden />
+        <input id="search" type="text" placeholder="搜索…" hidden />
+        <div id="advToggle" hidden><button id="advBtn">⏱ 按时间搜索 ▸</button></div>
+        <div id="advPanel" hidden>
+          <div class="adv-tabs">
+            <button data-mode="text" class="on">按文本搜索</button>
+            <button data-mode="time">按时间搜索</button>
+          </div>
+          <input type="date" id="dateSearch" hidden />
+          <div class="adv-hint" id="advHint">使用上方搜索框输入关键词</div>
+        </div>
       </div>
       <div id="feed"></div>
       <div id="empty" hidden>还没有发布任何内容 📭</div>
@@ -145,18 +167,28 @@
 var $ = function(s){ return document.querySelector(s); };
 var DATA_URL = 'blog.json';
 var posts = [], liked = {}, lastScroll = 0, authorName = '我的博客', authorAvatar = '';
+var searchMode = 'text'; // 'text' | 'time'
 try{ liked = JSON.parse(localStorage.getItem('blog-liked') || '{}'); }catch(e){ liked = {}; }
 
 function pad(n){ return String(n).padStart(2, '0'); }
-/* 微博式相对时间 */
+/* 时间：今天只显示 HH:mm，昨天显示「昨天 HH:mm」，其余显示 M月D日 HH:mm（跨年带年份），24 小时制 */
 function fmtTime(ts){
   var d = new Date(ts || 0), now = new Date();
-  var diff = Date.now() - (ts || 0);
-  if(diff < 60000) return '刚刚';
-  if(diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-  if(d.toDateString() === now.toDateString()) return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  var that0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  var diffDays = Math.round((today0 - that0) / 86400000);
+  if(diffDays === 0) return hm;
+  if(diffDays === 1) return '昨天 ' + hm;
   var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年';
-  return y + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  return y + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+}
+/* 某条笔记是否落在指定日期（本地时区），dateStr 为 YYYY-MM-DD */
+function onDate(ts, dateStr){
+  if(!dateStr) return true;
+  var d = new Date(ts || 0);
+  var s = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  return s === dateStr;
 }
 var stripDiv = document.createElement('div');
 function stripHtml(html){ stripDiv.innerHTML = html || ''; return stripDiv.textContent || ''; }
@@ -194,16 +226,21 @@ function avatarHtml(cls){
     : '<div class="' + cls + '">📝</div>';
 }
 
-function renderFeed(q){
+function renderFeed(){
   var box = $('#feed');
   box.innerHTML = '';
-  q = (q || '').trim().toLowerCase();
+  var q = ($('#search').value || '').trim().toLowerCase();
+  var dateStr = searchMode === 'time' ? $('#dateSearch').value : '';
   var list = posts.filter(function(n){
+    if(searchMode === 'time'){
+      return onDate(n.updated, dateStr);
+    }
     if(!q) return true;
     return ((n.title || '') + ' ' + stripHtml(n.content)).toLowerCase().indexOf(q) !== -1;
   });
   if(!list.length){
-    $('#feed').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:13.5px">' + (q ? '没有匹配的内容' : '还没有内容') + '</div>';
+    $('#feed').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:13.5px">' +
+      (searchMode === 'time' ? '这一天没有内容' : (q ? '没有匹配的内容' : '还没有内容')) + '</div>';
     return;
   }
   list.forEach(function(n){
@@ -214,8 +251,7 @@ function renderFeed(q){
       avatarHtml('fi-avatar') +
       '<div class="fi-body">' +
         '<div class="fi-head"><span class="fi-name"></span>' +
-          (n.pinned ? '<span class="pin-tag">置顶</span>' : '') +
-          '<span class="fi-time">' + fmtTime(n.updated) + '</span></div>' +
+          (n.pinned ? '<span class="pin-tag">置顶</span>' : '') + '</div>' +
         '<div class="fi-content' + (long ? ' clamped' : '') + '"></div>' +
         (long ? '<span class="expand-btn">全文</span>' : '') +
         '<div class="fi-actions">' +
@@ -223,6 +259,7 @@ function renderFeed(q){
           '<button class="act-share">🔗 分享</button>' +
           '<button class="act-open">📄 查看</button>' +
         '</div>' +
+        '<div class="fi-foot"><span class="fi-time">' + fmtTime(n.updated) + '</span></div>' +
       '</div>';
     item.querySelector('.fi-name').textContent = authorName;
     item.querySelector('.fi-content').innerHTML = sanitize(n.content);
@@ -297,8 +334,9 @@ function route(){
 function fillProfile(data){
   authorName = data.author || '我的博客';
   authorAvatar = data.avatar || '';
-  document.title = authorName + ' 的博客';
-  $('#siteName').textContent = authorName;
+  var siteName = data.siteName || authorName;
+  document.title = siteName;
+  $('#siteName').textContent = siteName;
   $('#pName').textContent = authorName;
   $('#pBio').textContent = data.bio || '';
   if(authorAvatar){
@@ -313,8 +351,28 @@ function fillProfile(data){
 $('#backBtn').addEventListener('click', showList);
 $('#homeBtn').addEventListener('click', showList);
 $('#homeBtn2').addEventListener('click', showList);
-$('#search').addEventListener('input', function(){ renderFeed(this.value); });
+$('#search').addEventListener('input', renderFeed);
 window.addEventListener('hashchange', route);
+
+/* ---------- 高级搜索：按文本 / 按时间 ---------- */
+$('#advBtn').addEventListener('click', function(){
+  var panel = $('#advPanel');
+  panel.hidden = !panel.hidden;
+  this.textContent = panel.hidden ? '⏱ 按时间搜索 ▸' : '⏱ 收起搜索选项 ▾';
+});
+document.querySelectorAll('.adv-tabs button').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.adv-tabs button').forEach(function(b){ b.classList.remove('on'); });
+    btn.classList.add('on');
+    searchMode = btn.dataset.mode;
+    var isTime = searchMode === 'time';
+    $('#dateSearch').hidden = !isTime;
+    $('#advHint').textContent = isTime ? '选择日期，查看这一天的内容' : '使用上方搜索框输入关键词';
+    $('#search').style.opacity = isTime ? '.4' : '1';
+    renderFeed();
+  });
+});
+$('#dateSearch').addEventListener('input', renderFeed);
 
 fetch(DATA_URL + '?t=' + Date.now())
   .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
@@ -325,7 +383,8 @@ fetch(DATA_URL + '?t=' + Date.now())
     fillProfile(data);
     if(!posts.length){ $('#empty').hidden = false; $('#feed').hidden = true; return; }
     $('#search').hidden = false;
-    renderFeed('');
+    $('#advToggle').hidden = false;
+    renderFeed();
     route();
   })
   .catch(function(){
@@ -336,6 +395,5 @@ fetch(DATA_URL + '?t=' + Date.now())
   });
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4655f3c58dd6497fb7ddb85b68480db7","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

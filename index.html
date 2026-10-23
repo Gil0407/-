@@ -23,6 +23,7 @@
   html,body{height:100%;margin:0}
   body{font-family:"Segoe UI",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.7;background:var(--bg);color:var(--text);}
   button{font:inherit;cursor:pointer}
+  input{font:inherit}
   #app{display:flex;height:100vh;overflow:hidden}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
@@ -60,6 +61,15 @@
   .backup-row button{flex:1;padding:6px;border:1px solid var(--border);background:none;border-radius:8px;color:var(--muted);font-size:12.5px}
   .backup-row button:hover{color:var(--text);border-color:var(--accent)}
   #storageInfo{font-size:11.5px;color:var(--muted)}
+
+  /* ---------- 博客设置 ---------- */
+  #blogSettings{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  #blogSettings .bs-head{padding:6px 10px;font-size:12.5px;color:var(--muted);cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+  #blogSettings .bs-head:hover{background:var(--hover)}
+  #blogSettings .bs-body{padding:8px 10px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border)}
+  #blogSettings label{font-size:11.5px;color:var(--muted);display:block}
+  #blogSettings input{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);outline:none;font-size:13px}
+  #blogSettings input:focus{border-color:var(--accent)}
 
   /* ---------- 主区 ---------- */
   #main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
@@ -124,7 +134,15 @@
         <button id="importBtn">⬆ 导入备份</button>
       </div>
       <div class="backup-row">
-        <button id="publishBtn">🌍 发布到博客</button>
+        <button id="publishBtn">🌍 全部发布到博客</button>
+      </div>
+      <div id="blogSettings">
+        <div class="bs-head" id="bsToggle"><span>⚙️ 博客设置（标题 / ID / 头像）</span><span id="bsArrow">▾</span></div>
+        <div class="bs-body" id="bsBody" hidden>
+          <div><label>博客标题（显示在博客左上角）</label><input id="siteNameInput" type="text" placeholder="我的博客" /></div>
+          <div><label>博客 ID（显示在每条内容的昵称位置）</label><input id="authorInput" type="text" placeholder="Gil0407" /></div>
+          <div><label>头像（点左上角圆形头像上传）</label></div>
+        </div>
       </div>
       <span id="storageInfo"></span>
     </footer>
@@ -185,15 +203,37 @@ function fmtTime(ts){
   var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '-';
   return y + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + hm;
 }
+/* 绝对时间：写入 json 用，24 小时制 */
+function absTime(ts){
+  var d = new Date(ts || Date.now()), now = new Date();
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年';
+  return y + (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+}
 var stripDiv = document.createElement('div');
 function stripHtml(html){ stripDiv.innerHTML = html; return stripDiv.textContent || ''; }
 
-/* ================= 头像 ================= */
+/* ================= 博客设置（标题 / ID / 头像） ================= */
+function getSiteName(){ return localStorage.getItem('notepad-site-name') || ''; }
+function getAuthorId(){ return localStorage.getItem('notepad-author-id') || ''; }
 function getAvatar(){ return localStorage.getItem('notepad-avatar') || ''; }
 function applyAvatar(){
   var a = getAvatar();
   $('#meAvatar').innerHTML = a ? '<img src="' + a + '" alt="">' : '📝';
 }
+$('#bsToggle').addEventListener('click', function(){
+  var body = $('#bsBody');
+  body.hidden = !body.hidden;
+  $('#bsArrow').textContent = body.hidden ? '▾' : '▴';
+});
+$('#siteNameInput').value = getSiteName();
+$('#authorInput').value = getAuthorId();
+$('#siteNameInput').addEventListener('input', function(){
+  localStorage.setItem('notepad-site-name', this.value.trim());
+});
+$('#authorInput').addEventListener('input', function(){
+  localStorage.setItem('notepad-author-id', this.value.trim());
+});
 $('#meAvatar').addEventListener('click', function(){ $('#avatarInput').click(); });
 $('#avatarInput').addEventListener('change', function(){
   var f = this.files[0];
@@ -214,7 +254,7 @@ $('#avatarInput').addEventListener('change', function(){
       try{
         localStorage.setItem('notepad-avatar', c.toDataURL('image/jpeg', 0.85));
         applyAvatar();
-        toast('头像已更新，点「发布到博客」后博客生效');
+        toast('头像已更新，发布后博客生效');
       }catch(e){ toast('头像保存失败：存储空间不足'); }
     };
     img.onerror = function(){ toast('图片读取失败'); };
@@ -238,7 +278,8 @@ function initStore(){
         resolve({
           getAll: function(){ return req2p(db.transaction('notes','readonly').objectStore('notes').getAll()); },
           put: function(n){ return req2p(db.transaction('notes','readwrite').objectStore('notes').put(n)); },
-          delete: function(id){ return req2p(db.transaction('notes','readwrite').objectStore('notes').delete(id)); }
+          delete: function(id){ return req2p(db.transaction('notes','readwrite').objectStore('notes').delete(id)); },
+          clear: function(){ return req2p(db.transaction('notes','readwrite').objectStore('notes').clear()); }
         });
       };
       req.onerror = function(){ rejectLS(); };
@@ -261,6 +302,10 @@ function initStore(){
         },
         delete: function(id){
           this._data = this._data.filter(function(x){ return x.id !== id; });
+          this._save(); return Promise.resolve();
+        },
+        clear: function(){
+          this._data = [];
           this._save(); return Promise.resolve();
         }
       };
@@ -304,13 +349,11 @@ function renderList(){
     item.dataset.id = n.id;
     item.innerHTML =
       '<div class="ni-title">' + (n.pinned ? '<span class="pin-flag">📌</span>' : '') +
-        (n.published ? '<span class="pin-flag">🌍</span>' : '') +
         '<span class="ni-title-text">' + esc(n.title || '无标题') + '</span></div>' +
       (snippet ? '<div class="ni-snippet">' + esc(snippet) + '</div>' : '') +
       '<div class="ni-meta"><span>' + fmtTime(n.updated || n.created || 0) + '</span>' +
         '<span class="ni-actions">' +
           '<button data-act="pin" title="置顶/取消置顶">📌</button>' +
-          '<button data-act="pub" title="公开到博客 / 取消公开">' + (n.published ? '🌍' : '◌') + '</button>' +
           '<button data-act="del" title="删除">🗑️</button>' +
         '</span></div>';
     frag.appendChild(item);
@@ -410,15 +453,6 @@ function togglePin(id){
   toast(n.pinned ? '已置顶 📌' : '已取消置顶');
 }
 
-function togglePublished(id){
-  var n = getNote(id);
-  if(!n) return;
-  n.published = !n.published;
-  store.put(n);
-  renderList();
-  toast(n.published ? '已标记公开 🌍（点左下角「发布到博客」生效）' : '已取消公开');
-}
-
 function updateWordCount(){
   var t = editor.innerText.trim();
   var count = t ? t.replace(/\s+/g, '').length : 0;
@@ -505,7 +539,6 @@ editor.addEventListener('drop', function(e){
   var files = Array.prototype.slice.call(e.dataTransfer.files || []).filter(function(f){ return /^image\//.test(f.type); });
   if(files.length){
     e.preventDefault();
-    // 把光标放到落点
     try{
       var range;
       if(document.caretRangeFromPoint){ range = document.caretRangeFromPoint(e.clientX, e.clientY); }
@@ -691,7 +724,6 @@ function pullNotes(){
     if(!remote.data || !Array.isArray(remote.data.notes)) return;
     var before = notes.length;
     notes = mergeNotes(notes, remote.data.notes);
-    // 把远程较新的内容写回本地存储
     var chain = Promise.resolve();
     notes.forEach(function(n){ chain = chain.then(function(){ return store.put(n); }); });
     return chain.then(function(){
@@ -715,7 +747,6 @@ function pushNotes(retry){
   if(!token) return Promise.resolve();
   pushing = true;
   return ghGetFile(GH_NOTES_FILE, token).then(function(remote){
-    // 先合并远程，避免覆盖其它设备刚写的内容
     notes = mergeNotes(notes, (remote.data && remote.data.notes) || []);
     return ghPutFile(GH_NOTES_FILE,
       { app: 'notepad', version: 1, syncedAt: Date.now(), notes: notes },
@@ -724,7 +755,7 @@ function pushNotes(retry){
   }).then(function(){
     sortNotes(); renderList();
   }).catch(function(e){
-    if(!retry && /HTTP 409|HTTP 422/.test(e.message)) return pushNotes(true); // sha 冲突，重取重试一次
+    if(!retry && /HTTP 409|HTTP 422/.test(e.message)) return pushNotes(true);
   }).then(function(){
     pushing = false;
   });
@@ -734,35 +765,61 @@ function schedulePush(){
   pushTimer = setTimeout(function(){ pushNotes(); }, 8000); // 停止编辑 8 秒后自动推送
 }
 
-/* ---------- 发布到博客（增量合并，不再整文件覆盖） ---------- */
+/* ---------- 全部发布到博客（发布后清空本地记事本） ---------- */
 function publishToBlog(){
-  var pub = notes.filter(function(n){ return n.published; });
-  if(!pub.length){ toast('先悬停笔记点 ◌ 标记要公开的'); return; }
+  if(!notes.length){ toast('记事本是空的'); return; }
+  if(!confirm('将把 ' + notes.length + ' 条笔记全部发布到博客，并清空本地记事本。\n（要删除已发布的内容请打开 admin.html）')) return;
   var token = getToken();
   if(!token) return;
   toast('正在发布…');
   ghGetFile(GH_BLOG_FILE, token).then(function(remote){
     var remoteNotes = (remote.data && Array.isArray(remote.data.notes)) ? remote.data.notes : [];
+    // 给每条笔记带上具体时间（写入 json，24 小时制）
+    var pub = notes.map(function(n){
+      var c = normalizeNote(n);
+      c.published = true;
+      c.time = absTime(c.updated);
+      return c;
+    });
     var pubMap = {};
     pub.forEach(function(n){ pubMap[n.id] = n; });
-    // 1) 远程里仍被选中的：保留原顺序，内容用本地最新版
+    // 1) 远程里已存在的：保留原顺序，内容用本地最新版
     var merged = remoteNotes.filter(function(r){ return pubMap[r.id]; })
                             .map(function(r){ return pubMap[r.id]; });
-    // 2) 本地新选中、远程没有的：追加到后面
+    // 2) 本地新的：追加到后面
     var inMerged = {};
     merged.forEach(function(n){ inMerged[n.id] = 1; });
     pub.forEach(function(n){ if(!inMerged[n.id]) merged.push(n); });
-    // 3) 远程里没选中的自动删除（不在 merged 里即被丢弃）
     var payload = {
       app: 'notepad-blog', version: 1,
-      author: GH_REPO.split('/')[0],
+      author: getAuthorId() || GH_REPO.split('/')[0],
+      siteName: getSiteName(),
       avatar: getAvatar(),
       publishedAt: Date.now(),
       notes: merged
     };
-    return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString());
-  }).then(function(){
-    toast('已发布 ' + pub.length + ' 篇 ✓ 约1分钟后可见');
+    return ghPutFile(GH_BLOG_FILE, payload, remote.sha, token, 'publish blog ' + new Date().toISOString())
+      .then(function(){ return remote; });
+  }).then(function(remote){
+    // 清空本地记事本
+    var count = notes.length;
+    notes = [];
+    currentId = null;
+    clearTimeout(saveTimer);
+    return store.clear().then(function(){
+      titleInput.value = '';
+      editor.innerHTML = '';
+      renderList();
+      updateStorageInfo();
+      showEmpty(true);
+      // 云端 notes.json 也清空，避免其它设备把已发布的内容同步回来
+      return ghGetFile(GH_NOTES_FILE, token).then(function(r2){
+        return ghPutFile(GH_NOTES_FILE, { app: 'notepad', version: 1, syncedAt: Date.now(), notes: [] },
+          r2.sha, token, 'clear notes after publish ' + new Date().toISOString());
+      }).catch(function(){});
+    }).then(function(){
+      toast('已发布 ' + count + ' 篇 ✓ 本地已清空，约1分钟后博客可见');
+    });
   }).catch(function(e){
     toast('发布失败：' + e.message + '（检查 Token 权限）');
   });
@@ -819,7 +876,6 @@ $('#noteList').addEventListener('click', function(e){
   if(btn){
     if(btn.dataset.act === 'del'){ deleteNote(id); return; }
     if(btn.dataset.act === 'pin'){ togglePin(id); return; }
-    if(btn.dataset.act === 'pub'){ togglePublished(id); return; }
   }
   selectNote(id);
   document.body.classList.remove('sidebar-open');
@@ -863,10 +919,10 @@ function makeWelcomeNote(){
       '<img src="' + demo + '" alt="示例图片">' +
       '<p>✍️ 直接输入文字即可，内容会<b>自动保存</b></p>' +
       '<p>🖼️ 插入图片的三种方式：点工具栏「图片」按钮选择文件、<b>Ctrl+V 直接粘贴截图</b>、把图片文件<b>拖进编辑区</b></p>' +
-      '<p>🔍 左侧列表可以搜索笔记；悬停笔记可 📌 置顶或 🗑️ 删除；点 ◌ 可 🌍 公开到博客</p>' +
+      '<p>🔍 左侧列表可以搜索笔记；悬停笔记可 📌 置顶或 🗑️ 删除</p>' +
+      '<p>🌍 点左下角「全部发布到博客」会把笔记<b>全部上传</b>到博客，并清空本地；想删某条已发布的内容，打开 <b>admin.html</b>（后台管理，记得别公开这个地址）</p>' +
+      '<p>⚙️ 左下角「博客设置」可以改<b>博客标题、博客 ID</b>；点左上角头像换头像</p>' +
       '<p>💾 左下角可以导出 / 导入 JSON 备份，建议偶尔备份一次</p>' +
-      '<p>🌍 配置好 GitHub Token 后，笔记会<b>自动在多台设备间同步</b>：手机写完，电脑上刷新就能看到</p>' +
-      '<p>👤 点左上角头像可以更换头像，发布博客后博客页会显示</p>' +
       '<p>🌙 右上角可以切换深色模式；手机上也能用</p>' +
       '<p>祝用得开心！这条笔记可以随时删掉。</p>',
     created: Date.now(),
@@ -907,6 +963,5 @@ try{ document.execCommand('styleWithCSS', false, false); }catch(e){}
 init();
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4655f3c58dd6497fb7ddb85b68480db7","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
